@@ -1,0 +1,37 @@
+diff --git a/fs/sysfs/file.c b/fs/sysfs/file.c
+index 96d0da65e..e1117720c 100644
+--- a/fs/sysfs/file.c
++++ b/fs/sysfs/file.c
+@@ -53,6 +53,18 @@ static int sysfs_kf_seq_show(struct seq_file *sf, void *v)
+ 	}
+ 	memset(buf, 0, PAGE_SIZE);
+ 
++	/*
++	 * Hearth OS (RT8): some MediaTek vendor drivers register attributes on
++	 * kobjects whose ktype has no sysfs_ops. Android never reads them, but
++	 * udev coldplug does, and dereferencing the NULL ops oopses the kernel.
++	 * Refuse the read and name the offender instead.
++	 */
++	if (unlikely(!ops)) {
++		pr_warn_ratelimited("sysfs: %s/%s has no sysfs_ops, refusing read\n",
++				    kobject_name(kobj), of->kn->name);
++		return -EIO;
++	}
++
+ 	/*
+ 	 * Invoke show().  Control may reach here via seq file lseek even
+ 	 * if @ops->show() isn't implemented.
+@@ -136,6 +148,13 @@ static ssize_t sysfs_kf_write(struct kernfs_open_file *of, char *buf,
+ 	if (!count)
+ 		return 0;
+ 
++	/* Hearth OS (RT8): same vendor-driver bug as in sysfs_kf_seq_show(). */
++	if (unlikely(!ops || !ops->store)) {
++		pr_warn_ratelimited("sysfs: %s/%s has no store op, refusing write\n",
++				    kobject_name(kobj), of->kn->name);
++		return -EIO;
++	}
++
+ 	return ops->store(kobj, of->kn->priv, buf, count);
+ }
+ 

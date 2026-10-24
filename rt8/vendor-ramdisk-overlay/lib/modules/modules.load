@@ -114,7 +114,6 @@ charger_class.ko
 mtk_charger_algorithm_class.ko
 pd_dbg_info.ko
 tcpc_class.ko
-aw35615_whole.ko
 mtk_chg_type_det.ko
 mtk_pd_adapter.ko
 mtk_pep40.ko
