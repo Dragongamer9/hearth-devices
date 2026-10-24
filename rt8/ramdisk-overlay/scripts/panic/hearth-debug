@@ -1,0 +1,58 @@
+#!/bin/sh
+# Hearth OS RT8 bring-up helper (debug builds only).
+#
+# Runs when the Halium initramfs gives up (no Hearth rootfs yet) just before
+# the telnet debug shell starts. In the background it:
+#   1. logs the USB device-mode state into the kernel log, and
+#   2. if USB still isn't attached after HEARTH_DEBUG_REBOOT seconds, forces a
+#      kernel crash (sysrq-c). If USB comes up it exits and leaves telnet be.
+# On MediaTek only a kernel exception puts DRAM into reserve mode across the
+# reset, so the kernel log survives in pstore and can be read from the PC
+# with (a plain soft reboot via sysrq-b comes back with pstore wiped):
+#   mtk.py da peek 0x48090000 0xE0000 --filename rt8-pstore.bin
+# Holding the power button instead cuts power and wipes that log.
+
+PREREQ=""
+prereqs() { echo "$PREREQ"; }
+case $1 in prereqs) prereqs; exit 0 ;; esac
+
+HEARTH_DEBUG_REBOOT=90
+
+log() { echo "hearth-debug: $*" > /dev/kmsg; }
+show() {
+	for f in "$@"; do
+		[ -e "$f" ] || continue
+		log "$f = $(cat "$f" 2>/dev/null | tr '\n' ' ')"
+	done
+}
+
+(
+	sleep 20
+	log "---- USB state, 20s after Halium panic ----"
+	log "udc: $(ls /sys/class/udc 2>/dev/null | tr '\n' ' ')"
+	show /config/usb_gadget/g1/UDC /sys/class/udc/*/state /sys/class/udc/*/current_speed
+	log "net: $(ls /sys/class/net 2>/dev/null | tr '\n' ' ')"
+	log "tcpc: $(ls /sys/class/tcpc 2>/dev/null | tr '\n' ' ')"
+	show /sys/class/typec/*/data_role /sys/class/typec/*/power_role
+	show /sys/class/power_supply/*/online /sys/class/power_supply/*/type
+	show /sys/class/power_supply/*/usb_type /sys/class/power_supply/*/chr_type
+	log "modules: $(cut -d' ' -f1 /proc/modules | grep -iE 'musb|usb|udc|tcpc|aw35|typec|phy' | tr '\n' ' ')"
+	# Only crash if USB never came up: with a working USB link the telnet
+	# shell is the better debugging tool, so leave it alone.
+	waited=20
+	while [ $waited -lt $HEARTH_DEBUG_REBOOT ]; do
+		if grep -qvx 'not attached' /sys/class/udc/musb-hdrc/state 2>/dev/null; then
+			log "USB is up ($(cat /sys/class/udc/musb-hdrc/state)) - use telnet 192.168.2.15; not crashing"
+			exit 0
+		fi
+		sleep 5
+		waited=$((waited + 5))
+	done
+	log "---- USB still not attached after ${HEARTH_DEBUG_REBOOT}s; crashing on purpose so this log survives ----"
+	show /config/usb_gadget/g1/UDC /sys/class/udc/*/state
+	log "net: $(ls /sys/class/net 2>/dev/null | tr '\n' ' ')"
+	sync
+	echo 1 > /proc/sys/kernel/sysrq
+	echo c > /proc/sysrq-trigger
+	reboot -f
+) &
