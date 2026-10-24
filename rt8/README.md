@@ -55,12 +55,12 @@ local reference copies made by `tools/extract-stock.sh`.
 
 ## Building
 
-CI builds on every push to `devices/rt8/` (see
-`.github/workflows/rt8-port.yml`) and uploads `boot.img`, `vendor_boot.img`
+CI builds on every push to `rt8/` (see
+`.github/workflows/rt8.yml`) and uploads `boot.img`, `vendor_boot.img`
 and `dtbo.img` as an artifact. Locally, on Ubuntu 22.04:
 
 ```bash
-cd devices/rt8
+cd rt8
 ./build.sh
 ```
 

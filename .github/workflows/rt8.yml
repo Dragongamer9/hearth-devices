@@ -1,0 +1,78 @@
+name: RT8
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'rt8/**'
+      - '.github/workflows/rt8.yml'
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    defaults:
+      run:
+        working-directory: rt8
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Free disk space
+        run: sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            bc bison build-essential ca-certificates cpio curl device-tree-compiler \
+            fakeroot flex git kmod libelf-dev libssl-dev libtinfo5 lz4 python2 python3 \
+            unzip wget xz-utils pahole libbpf-dev
+          sudo ln -sf python2 /usr/bin/python
+
+      - name: Build kernel and boot images
+        run: |
+          set -o pipefail
+          ./build.sh 2>&1 | tee build.log
+
+      - name: Surface build errors
+        if: failure()
+        run: |
+          # Job logs are not always readable; annotations are. Put the error
+          # lines and the log tail into a few annotations.
+          {
+            echo "== error lines =="
+            grep -nE '(error|Error|ERROR|fatal|No such file|not found|undefined reference)' build.log | grep -v -- '-Werror' | tail -40
+            echo "== last 40 lines =="
+            tail -40 build.log
+          } > errors.txt || true
+          split -l 25 errors.txt part_
+          for f in part_*; do
+            msg=$(sed -e 's/%/%25/g' -e 's/\r/%0D/g' "$f" | sed ':a;N;$!ba;s/\n/%0A/g')
+            echo "::error title=rt8 build ($f)::$msg"
+          done
+
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: hearth-rt8-build-log
+          path: rt8/build.log
+
+      - name: Check image sizes against the RT8 partitions
+        run: |
+          echo "::notice title=rt8 out/::$(ls -l out | sed ':a;N;$!ba;s/\n/%0A/g')"
+          for f in boot vendor_boot; do
+            test -f out/$f.img || { echo "::error::out/$f.img missing"; exit 1; }
+            info=$(python3 -I tools/bootimg.py info out/$f.img) || { echo "::error::$f.img does not parse"; exit 1; }
+            echo "::notice title=rt8 $f.img::$(echo "$info" | sed ':a;N;$!ba;s/\n/%0A/g')"
+            size=$(stat -c%s out/$f.img)
+            test "$size" -le 67108864 || { echo "::error::$f.img is $size bytes, over the 64 MiB partition"; exit 1; }
+          done
+
+      - uses: actions/upload-artifact@v4
+        # Keep the boot images even if a later packaging step failed.
+        if: always()
+        with:
+          name: hearth-rt8-boot
+          path: |
+            rt8/out/*.img
+            rt8/out/*.tar.*
+          if-no-files-found: warn

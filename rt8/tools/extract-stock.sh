@@ -3,7 +3,7 @@
 #
 #   tools/extract-stock.sh <path/to/OUKITEL_RT8_*.zip | unpacked firmware dir>
 #
-# Writes into devices/rt8/stock/ (git-ignored — Oukitel's binaries are never
+# Writes into rt8/stock/ (git-ignored — Oukitel's binaries are never
 # committed):
 #   vendor.dtb   device tree from vendor_boot.img (prebuilt DTB for first boot)
 #   dtbo.img     stock DT overlays

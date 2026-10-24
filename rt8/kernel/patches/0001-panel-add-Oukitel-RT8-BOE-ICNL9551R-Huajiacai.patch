@@ -14,7 +14,7 @@ index 1ce439799..6f5e2f4ed 100755
  	//m100t
 diff --git a/drivers/gpu/drm/panel/mt8781/rt8_icnl9551r_huajiacai_wuxga_90hz.c b/drivers/gpu/drm/panel/mt8781/rt8_icnl9551r_huajiacai_wuxga_90hz.c
 new file mode 100644
-index 000000000..c6495347e
+index 000000000..3615d30d1
 --- /dev/null
 +++ b/drivers/gpu/drm/panel/mt8781/rt8_icnl9551r_huajiacai_wuxga_90hz.c
 @@ -0,0 +1,794 @@
@@ -25,7 +25,7 @@ index 000000000..c6495347e
 + * Based on the Volla/Weibu MT8781 driver m100t_icnl9951r_hkc_hjr110066d_wuxga_90hz.c.
 + * Init commands, timings, PLL and DSC settings were recovered from Oukitel's stock module
 + * panel-huajiacai-boe-icnl9551r-10p4-vdo-90hz-p556.ko (V14 2026-08-28) with
-+ * devices/rt8/tools/extract-panel-init.py.
++ * rt8/tools/extract-panel-init.py in Dragongamer9/hearth-devices.
 + *
 + * Original copyright:
 + * Copyright (c) 2018 MediaTek Inc.
