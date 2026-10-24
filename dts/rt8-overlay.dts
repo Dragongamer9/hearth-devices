@@ -164,6 +164,8 @@
 			#size-cells = <0x00>;
 
 			panel1@0 {
+				/* Hearth: not fitted on the reference unit (see README) */
+				status = "disabled";
 				compatible = "boe,icnl9551r,vdo,60hz,dphy";
 				reg = <0x00>;
 				reset-gpios = <0xffffffff 0x55 0x00>;
@@ -180,7 +182,10 @@
 			};
 
 			panel2@0 {
-				compatible = "boe,icnl9551r,vdo,90hz,dphy";
+				/* Hearth: BOE ICNL9551R (Huajiacai) via the wb,drm_lcm driver;
+				 * stock compatible was "boe,icnl9551r,vdo,90hz,dphy". */
+				compatible = "wb,drm_lcm";
+				lcm_name = "rt8_icnl9551r_huajiacai_wuxga_90hz";
 				reg = <0x01>;
 				reset-gpios = <0xffffffff 0x55 0x00>;
 				bias-gpios = <0xffffffff 0x9c 0x00 0xffffffff 0x9e 0x00>;
@@ -196,6 +201,8 @@
 			};
 
 			panel3@0 {
+				/* Hearth: not fitted on the reference unit (see README) */
+				status = "disabled";
 				compatible = "boe,hx83102,vdo,90hz,dphy";
 				reg = <0x02>;
 				reset-gpios = <0xffffffff 0x55 0x00>;
@@ -216,7 +223,8 @@
 				port {
 
 					endpoint {
-						remote-endpoint = <0x09>;
+						/* Hearth: route DSI to panel2 (stock pointed at panel1) */
+						remote-endpoint = <0x66>;
 						phandle = <0x08>;
 					};
 				};

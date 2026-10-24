@@ -44,6 +44,8 @@ dts/rt8-overlay.dts        stock RT8 dtbo, decompiled (recompiles byte-identical
 vendor-ramdisk-overlay/    kernel modules loaded from vendor_boot
 tools/bootimg.py           boot/vendor_boot/dtbo pack + unpack (verified against stock)
 tools/extract-stock.sh     pull reference pieces out of an Oukitel firmware zip
+tools/extract-panel-init.py  recover a panel's init commands from a stock panel .ko
+kernel/patches/            Hearth kernel patches applied by build.sh
 build.sh                   build boot images (Ubuntu 22.04 or CI)
 flash.sh                   flash over fastboot
 ```
@@ -75,13 +77,33 @@ run needs a few GB and some time.
 
 1. **Kernel + boot images** (this stage). Builds, fits the partitions.
 2. **First boot to a shell.** Flash `./flash.sh boot`, reach the Halium
-   initramfs over USB (telnet on 192.168.2.15). Needs the panel identified
-   and its DT node switched to `wb,drm_lcm` with the recovered timings.
+   initramfs over USB (telnet on 192.168.2.15). The display driver for the
+   reference unit's panel is in place (see "Display" below).
 3. **Hearth rootfs.** Debian ARM64 (Peppermint base) with Halium/libhybris
    packages, Hearth's Rust/Tauri app and Mantel. Flash system (Halium 14 GSI)
    from fastbootd and the rootfs to userdata.
 4. **Hardware bring-up.** Display through hwcomposer, touch, Wi-Fi, audio,
    charging, suspend, controllers.
+
+## Display
+
+The reference unit has the **Huajiacai BOE ICNL9551R** panel (stock driver
+`panel-huajiacai-boe-icnl9551r-10p4-vdo-90hz-p556`, bound at `14013000.dsi.1`).
+Find yours on Android with:
+
+```bash
+adb shell 'for d in /sys/bus/mipi-dsi/drivers/*/; do echo "$d"; ls "$d"; done'
+```
+
+The panel uses DSC compression, so it gets a real driver:
+`kernel/patches/0001-panel-add-Oukitel-RT8-BOE-ICNL9551R-Huajiacai.patch` adds
+`rt8_icnl9551r_huajiacai_wuxga_90hz.c` to the Volla panel set, based on Volla's
+ICNL9951R DSC driver. Its 46 init commands, timings, PLL (480) and DSC
+parameters were recovered from Oukitel's stock module with
+`tools/extract-panel-init.py`; the DSC values match the PPS the panel itself
+is sent byte for byte. `dts/rt8-overlay.dts` points `panel2@0` at it and
+disables the other two panel nodes. The other two panels need their own
+driver files before Hearth can ship to every RT8.
 
 ## Recovered panel timings
 
