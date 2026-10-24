@@ -15,7 +15,10 @@ WORKDIR="${WORKDIR:-workdir}"
 
 # 0. Device tree from source.
 mkdir -p dt
-dtc -q -@ -I dts -O dtb -o dt/vendor.dtb dts/rt8-base.dts
+# MediaTek's bootloader expects the vendor_boot DTB wrapped in an Android DT
+# table, exactly like stock (the wrapped result is byte-identical to stock).
+dtc -q -@ -I dts -O dtb -o dt/rt8-base.dtb dts/rt8-base.dts
+python3 -I tools/bootimg.py pack-dtbo dt/rt8-base.dtb -o dt/vendor.dtb
 dtc -q -@ -I dts -O dtb -o dt/rt8-overlay.dtbo dts/rt8-overlay.dts
 python3 -I tools/bootimg.py pack-dtbo dt/rt8-overlay.dtbo -o dt/dtbo.img
 

@@ -27,8 +27,9 @@ deviceinfo_ramdisk_compression="lz4"
 
 # --- Device tree ------------------------------------------------------------
 # Built by build.sh from dts/rt8-base.dts and dts/rt8-overlay.dts, which are
-# the stock RT8 device tree decompiled (they recompile byte-identical to the
-# stock vendor_boot DTB and dtbo.img). Hearth changes go into those files.
+# the stock RT8 device tree decompiled. dt/vendor.dtb is the base DTB wrapped
+# in an Android DT table like stock; unmodified, both recompile byte-identical
+# to the stock vendor_boot DTB and dtbo.img. Hearth changes go into the .dts.
 deviceinfo_bootimg_prebuilt_dtb="dt/vendor.dtb"
 deviceinfo_prebuilt_dtbo="dt/dtbo.img"
 
