@@ -44,6 +44,10 @@ fi
 # 4. Full build (clone step is skipped for repos that already exist).
 ./build/build.sh -b "$WORKDIR" "$@"
 
+# 5. The Halium tools leave the flashable images in workdir/tmp/partitions/;
+#    put them next to the device tarball in out/.
+cp -v "$WORKDIR"/tmp/partitions/*.img out/
+
 echo
 echo "Images in out/:"
-ls -lh out/*.img 2>/dev/null || true
+ls -lh out/
