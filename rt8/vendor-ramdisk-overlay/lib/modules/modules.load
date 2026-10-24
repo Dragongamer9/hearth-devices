@@ -9,7 +9,6 @@ monitor_hang.ko
 mtk_printk_ctrl.ko
 log_store.ko
 nvmem_mtk-devinfo.ko
-mtk_wdt.ko
 sec-rng.ko
 device-apc-common.ko
 device-apc-mt6789.ko
