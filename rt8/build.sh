@@ -27,20 +27,22 @@ python3 -I tools/bootimg.py pack-dtbo dt/rt8-overlay.dtbo -o dt/dtbo.img
 # 1. Fetch kernel + toolchains only.
 ./build/build.sh -b "$WORKDIR" -c
 
-# 2. Drop the RT8 config fragment into the cloned kernel tree.
+# 2. Reset the kernel tree to the pristine Volla source. CI restores the
+#    kernel tree and build output from cache, so start from a clean tree and
+#    re-apply everything; only files that actually change get rebuilt.
 # shellcheck source=deviceinfo disable=SC2154
 source ./deviceinfo
 KERNEL_DIR="$WORKDIR/downloads/$(basename "${deviceinfo_kernel_source%.git}")"
-cp kernel/rt8.config "$KERNEL_DIR/arch/arm64/configs/rt8.config"
+git -C "$KERNEL_DIR" checkout -q -- .
+git -C "$KERNEL_DIR" clean -qfd
 
-# 3. Apply any Hearth kernel patches (idempotent).
+# 3. RT8 config fragment and Hearth kernel patches. A patch that doesn't
+#    apply to the clean tree is a real error, so stop instead of skipping it.
+cp kernel/rt8.config "$KERNEL_DIR/arch/arm64/configs/rt8.config"
 if compgen -G "kernel/patches/*.patch" > /dev/null; then
     for p in kernel/patches/*.patch; do
-        if git -C "$KERNEL_DIR" apply --check "$PWD/$p" 2>/dev/null; then
-            git -C "$KERNEL_DIR" apply "$PWD/$p" && echo "applied $p"
-        else
-            echo "skip $p (already applied or does not apply)"
-        fi
+        git -C "$KERNEL_DIR" apply "$PWD/$p" || { echo "patch $p does not apply" >&2; exit 1; }
+        echo "applied $p"
     done
 fi
 

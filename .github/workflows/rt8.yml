@@ -28,6 +28,16 @@ jobs:
             unzip wget xz-utils pahole libbpf-dev
           sudo ln -sf python2 /usr/bin/python
 
+      # The AOSP toolchain, the kernel source and the kernel build output
+      # (KERNEL_OBJ) are cached between runs, so a rebuild only recompiles
+      # what changed. Each run saves a new cache; restore takes the newest.
+      - name: Restore build cache
+        uses: actions/cache/restore@v4
+        with:
+          path: rt8/workdir/downloads
+          key: rt8-downloads-${{ github.run_id }}
+          restore-keys: rt8-downloads-
+
       - name: Build kernel and boot images
         run: |
           set -o pipefail
@@ -55,6 +65,13 @@ jobs:
         with:
           name: hearth-rt8-build-log
           path: rt8/build.log
+
+      - name: Save build cache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: rt8/workdir/downloads
+          key: rt8-downloads-${{ github.run_id }}
 
       - name: Check image sizes against the RT8 partitions
         run: |
