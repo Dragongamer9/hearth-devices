@@ -3748,6 +3748,14 @@
 			sc8960x@6c {
 				compatible = "sc,sc89601d_charger";
 				reg = <0x6c>;
+				/*
+				 * Hearth: give the charger the USB2 PHY (u2port0, phandle 0x64)
+				 * so its BC1.2 detection can borrow D+/D-. Without it every
+				 * port read as a wall charger (DCP) and USB data never started.
+				 * Same wiring as Volla's sc8989x.dtsi (PHY_TYPE_USB2 = 3).
+				 */
+				phys = <0x64 0x03>;
+				phy-names = "usb2-phy";
 				io-channels = <0x19 0x02>;
 				io-channel-names = "pmic_vcdt_voltage";
 				status = "okay";
