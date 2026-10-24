@@ -1,0 +1,56 @@
+# Hearth OS — Oukitel RT8 (MediaTek Helio G99 / MT8781)
+# Consumed by halium-generic-adaptation-build-tools.
+#
+# Values below were taken from the stock OUKITEL_RT8_EEA_V14_20260828 firmware
+# (boot/vendor_boot header v4, GKI 5.10.233-android12-9) and from the Volla
+# Tablet (mimir) Halium port, which uses the same SoC and boot layout.
+
+deviceinfo_name="Oukitel RT8"
+deviceinfo_manufacturer="Oukitel"
+deviceinfo_codename="rt8"
+deviceinfo_arch="aarch64"
+
+# --- Kernel -----------------------------------------------------------------
+# Base: Volla Tablet MT8781 Halium kernel (android12-5.10 GKI family).
+# rt8.config is copied into arch/arm64/configs/ by build.sh before building.
+deviceinfo_kernel_source="https://gitlab.com/ubports/porting/reference-device-ports/halium13/volla-tablet/android_kernel_volla_mt8781.git"
+deviceinfo_kernel_source_branch="halium-13.0"
+deviceinfo_kernel_defconfig="gki_defconfig mimir.config entry_level.config halium.config rt8.config"
+deviceinfo_kernel_cmdline="systempart=/dev/mapper/system"
+deviceinfo_kernel_vendor_cmdline="bootopt=64S3,32N2,64N2"
+deviceinfo_kernel_clang_compile="true"
+deviceinfo_kernel_llvm_compile="true"
+# Same compiler the stock RT8 kernel was built with (Android clang 12.0.5, r416183b).
+deviceinfo_kernel_clang_branch="android12L-gsi"
+deviceinfo_kernel_clang_revision="r416183b"
+deviceinfo_ramdisk_compression="lz4"
+
+# --- Device tree ------------------------------------------------------------
+# Built by build.sh from dts/rt8-base.dts and dts/rt8-overlay.dts, which are
+# the stock RT8 device tree decompiled. dt/vendor.dtb is the base DTB wrapped
+# in an Android DT table like stock; unmodified, both recompile byte-identical
+# to the stock vendor_boot DTB and dtbo.img. Hearth changes go into the .dts.
+deviceinfo_bootimg_prebuilt_dtb="dt/vendor.dtb"
+deviceinfo_prebuilt_dtbo="dt/dtbo.img"
+
+# --- Boot image -------------------------------------------------------------
+# Stock layout: 64 MiB boot and vendor_boot, no init_boot, page size 4096.
+deviceinfo_bootimg_header_version="4"
+deviceinfo_bootimg_partition_size="67108864"
+deviceinfo_vendor_boot_partition_size="67108864"
+deviceinfo_bootimg_has_init_boot_partition="false"
+deviceinfo_bootimg_os_version="14"
+deviceinfo_bootimg_os_patch_level="2025-08"
+deviceinfo_flash_pagesize="4096"
+deviceinfo_flash_offset_base="0x0"
+deviceinfo_flash_offset_kernel="0x40000000"
+deviceinfo_flash_offset_ramdisk="0x66f00000"
+deviceinfo_flash_offset_tags="0x47c80000"
+deviceinfo_flash_offset_dtb="0x47c80000"
+deviceinfo_bootimg_qcdt="false"
+
+# --- Halium / rootfs --------------------------------------------------------
+# Stock vendor partition is Android 14, so the Halium system image is 14.
+deviceinfo_halium_version="14"
+deviceinfo_rootfs_image_sector_size="4096"
+deviceinfo_system_partition_size="3500M"
