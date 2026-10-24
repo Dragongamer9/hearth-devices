@@ -1,0 +1,42 @@
+#!/bin/sh
+# Hearth OS RT8 bring-up helper (debug builds only).
+#
+# Runs when the Halium initramfs gives up (no Hearth rootfs yet) just before
+# the telnet debug shell starts. In the background it:
+#   1. logs the USB device-mode state into the kernel log, and
+#   2. after HEARTH_DEBUG_REBOOT seconds does a soft (warm) reboot.
+# A warm reboot keeps RAM, so the kernel log survives in pstore and can be
+# read from the PC with:
+#   mtk.py da peek 0x48090000 0xE0000 --filename rt8-pstore.bin
+# Holding the power button instead cuts power and wipes that log.
+
+PREREQ=""
+prereqs() { echo "$PREREQ"; }
+case $1 in prereqs) prereqs; exit 0 ;; esac
+
+HEARTH_DEBUG_REBOOT=90
+
+log() { echo "hearth-debug: $*" > /dev/kmsg; }
+show() {
+	for f in "$@"; do
+		[ -e "$f" ] || continue
+		log "$f = $(cat "$f" 2>/dev/null | tr '\n' ' ')"
+	done
+}
+
+(
+	sleep 20
+	log "---- USB state, 20s after Halium panic ----"
+	log "udc: $(ls /sys/class/udc 2>/dev/null | tr '\n' ' ')"
+	show /config/usb_gadget/g1/UDC /sys/class/udc/*/state /sys/class/udc/*/current_speed
+	log "net: $(ls /sys/class/net 2>/dev/null | tr '\n' ' ')"
+	log "tcpc: $(ls /sys/class/tcpc 2>/dev/null | tr '\n' ' ')"
+	show /sys/class/typec/*/data_role /sys/class/typec/*/power_role
+	show /sys/class/power_supply/*/online /sys/class/power_supply/*/type
+	log "modules: $(cut -d' ' -f1 /proc/modules | grep -iE 'musb|usb|udc|tcpc|aw35|typec|phy' | tr '\n' ' ')"
+	log "---- rebooting (warm) in $((HEARTH_DEBUG_REBOOT - 20))s to keep this log in pstore ----"
+	sleep $((HEARTH_DEBUG_REBOOT - 20))
+	sync
+	echo b > /proc/sysrq-trigger
+	reboot -f
+) &
