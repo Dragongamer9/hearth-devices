@@ -10,7 +10,7 @@ userspace through libhybris — the approach Droidian and Ubuntu Touch use.
 
 | Device | Folder | SoC | Status |
 |---|---|---|---|
-| Oukitel RT8 | [`rt8/`](rt8/) | MediaTek Helio G99 (MT8781) | Kernel and boot images build; not booted yet |
+| Oukitel RT8 | [`rt8/`](rt8/) | MediaTek Helio G99 (MT8781) | Boots its own kernel; Halium initramfs shell over USB (telnet 192.168.2.15) |
 
 Each device folder has its own README with the hardware, how it's built, and
 what's left.
