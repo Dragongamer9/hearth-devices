@@ -1,0 +1,27 @@
+diff --git a/drivers/misc/mediatek/extcon/extcon-mtk-usb.c b/drivers/misc/mediatek/extcon/extcon-mtk-usb.c
+index ea5d2ffca..551947241 100644
+--- a/drivers/misc/mediatek/extcon/extcon-mtk-usb.c
++++ b/drivers/misc/mediatek/extcon/extcon-mtk-usb.c
+@@ -1278,8 +1278,12 @@ static int mtk_usb_extcon_probe(struct platform_device *pdev)
+ 
+ 	ret = of_get_named_gpio(dev->of_node, "docking_eint_gpio", 0);
+ 	if (ret < 0) {
+-		pr_err("MUSB docking :%s no docking_eint_gpio \n", __func__);
+-		return ret;
++		/* No docking connector (e.g. Oukitel RT8): the Type-C and
++		 * psy notifiers are already registered, so failing here would
++		 * leave them pointing at freed memory. Skip docking instead.
++		 */
++		pr_info("MUSB docking :%s no docking_eint_gpio, docking disabled\n", __func__);
++		goto skip_docking;
+ 	}
+ 	docking_eint_gpio = ret;
+ 
+@@ -1336,6 +1340,7 @@ static int mtk_usb_extcon_probe(struct platform_device *pdev)
+ 	}
+ 
+ 
++skip_docking:
+ 	docking_extcon = extcon;
+ #endif
+ 	platform_set_drvdata(pdev, extcon);
