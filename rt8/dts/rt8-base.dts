@@ -6022,7 +6022,6 @@
 
 		extcon_usb {
 			compatible = "mediatek,extcon-usb";
-			vbus-supply = <0xbb>;
 			charger = <0x54>;
 			tcpc = "type_c_port0";
 			mediatek,bypss-typec-sink = <0x01>;
