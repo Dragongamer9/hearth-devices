@@ -6024,7 +6024,6 @@
 			compatible = "mediatek,extcon-usb";
 			charger = <0x54>;
 			tcpc = "type_c_port0";
-			mediatek,bypss-typec-sink = <0x01>;
 			mediatek,u2;
 			phandle = <0x1a7>;
 
