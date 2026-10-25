@@ -6562,7 +6562,7 @@
 	mtk_ctd {
 		compatible = "mediatek,mtk_ctd";
 		bc12 = <0x54>;
-		bc12_sel = <0x02>;
+		bc12_sel = <0x00>;
 		phandle = <0x63>;
 	};
 
