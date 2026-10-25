@@ -93,3 +93,60 @@ jobs:
             rt8/out/*.img
             rt8/out/*.tar.*
           if-no-files-found: warn
+
+  # Test userspace for the first full boot: UBports' devel-flashable flow
+  # (Ubuntu Touch rootfs + Halium 14 GSI + our device tarball) packed into
+  # one ext4 image that goes to userdata as /data/ubuntu.img. The tablet's
+  # initramfs has busybox zcat, so it ships gzipped.
+  testimage:
+    needs: build
+    runs-on: ubuntu-22.04
+    defaults:
+      run:
+        working-directory: rt8
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Free disk space
+        run: sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            android-sdk-libsparse-utils e2fsprogs fakeroot git jq pigz sudo wget xz-utils zstd
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: hearth-rt8-boot
+          path: rt8/out
+
+      - name: Build ubuntu.img
+        run: |
+          set -o pipefail
+          git clone --depth 1 https://gitlab.com/ubports/porting/community-ports/halium-generic-adaptation-build-tools.git build
+          ./build/prepare-fake-ota.sh out/device_rt8_usrmerge.tar.xz ota 2>&1 | tee testimage.log
+          mkdir -p img
+          sudo ./build/system-image-from-ota.sh ota/ubuntu_command img 2>&1 | tee -a testimage.log
+          ls -l img
+          sudo mv img/rootfs.img ubuntu.img
+          sudo chown "$USER" ubuntu.img
+          pigz -6 ubuntu.img
+          ls -l ubuntu.img.gz
+          echo "::notice title=rt8 test image::$(ls -l ubuntu.img.gz) sha256 $(sha256sum ubuntu.img.gz | cut -c1-16)"
+
+      - name: Surface errors
+        if: failure()
+        run: |
+          tail -60 testimage.log > errors.txt || true
+          split -l 25 errors.txt part_
+          for f in part_*; do
+            msg=$(sed -e 's/%/%25/g' -e 's/\r/%0D/g' "$f" | sed ':a;N;$!ba;s/\n/%0A/g')
+            echo "::error title=rt8 testimage ($f)::$msg"
+          done
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: hearth-rt8-testimage
+          path: rt8/ubuntu.img.gz
+          compression-level: 0

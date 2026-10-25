@@ -16,7 +16,10 @@ deviceinfo_arch="aarch64"
 deviceinfo_kernel_source="https://gitlab.com/ubports/porting/reference-device-ports/halium13/volla-tablet/android_kernel_volla_mt8781.git"
 deviceinfo_kernel_source_branch="halium-13.0"
 deviceinfo_kernel_defconfig="gki_defconfig mimir.config entry_level.config halium.config rt8.config"
-deviceinfo_kernel_cmdline="systempart=/dev/mapper/system"
+# The rootfs and Android system image live on userdata (Halium "legacy"
+# layout: /data/ubuntu.img), so no systempart= is needed. RT8's LK also
+# overwrites the start of this string, so keep nothing important here.
+deviceinfo_kernel_cmdline="hearth.lk_pad=xxxxxxxxxxxxxxxxxxxxxxxx"
 deviceinfo_kernel_vendor_cmdline="bootopt=64S3,32N2,64N2"
 deviceinfo_kernel_clang_compile="true"
 deviceinfo_kernel_llvm_compile="true"
@@ -53,4 +56,6 @@ deviceinfo_bootimg_qcdt="false"
 # Stock vendor partition is Android 14, so the Halium system image is 14.
 deviceinfo_halium_version="14"
 deviceinfo_rootfs_image_sector_size="4096"
-deviceinfo_system_partition_size="3500M"
+deviceinfo_system_partition_size="5G"
+# Test userspace for the first full boot (UBports devel-flashable image).
+deviceinfo_ubuntu_touch_release="24.04-2.x"
