@@ -1,8 +1,9 @@
 #!/bin/sh
-# Hearth (RT8) bring-up: install the debug USB-network and shell services
-# from /hearth-provision into the rootfs image on userdata before it boots.
-# The UBports test image only enables USB tethering/SSH through Upstart
-# files, which systemd (24.04) ignores. Never fails the boot.
+# Hearth (RT8) bring-up: install a key-only root SSH service from
+# /hearth-provision into the rootfs image on userdata before it boots.
+# The UBports test image only enables SSH through an Upstart file, which
+# systemd (24.04) ignores. Ubuntu Touch's own USB tethering provides the
+# network (tablet at 10.15.19.82). Never fails the boot.
 PREREQ=""
 prereqs() { echo "$PREREQ"; }
 case "$1" in prereqs) prereqs; exit 0;; esac
@@ -24,19 +25,26 @@ for f in ubuntu.img rootfs.img; do
 	[ -f "$DATA/$f" ] && { img="$DATA/$f"; break; }
 done
 if [ -n "$img" ] && mount -o loop,rw "$img" "$ROOT" 2>/dev/null; then
-	cp -a "$SRC/." "$ROOT/"
-	# The ramdisk overlay is packed with the build user's IDs.
-	chown -R 0:0 "$ROOT/usr/libexec/hearth"
-	for f in hearth-usbnet.service hearth-shell.socket hearth-shell@.service; do
-		chown 0:0 "$ROOT/usr/lib/systemd/system/$f"
-	done
 	w="$ROOT/usr/lib/systemd/system"
-	mkdir -p "$w/multi-user.target.wants" "$w/sockets.target.wants"
-	ln -sf ../hearth-usbnet.service "$w/multi-user.target.wants/hearth-usbnet.service"
-	ln -sf ../hearth-shell.socket "$w/sockets.target.wants/hearth-shell.socket"
+	# Remove the earlier unauthenticated shell and USB-network service if a
+	# previous build installed them.
+	rm -f "$w/hearth-usbnet.service" "$w/hearth-shell.socket" "$w/hearth-shell@.service" \
+		"$w/multi-user.target.wants/hearth-usbnet.service" \
+		"$w/sockets.target.wants/hearth-shell.socket"
+	rm -rf "$ROOT/usr/libexec/hearth"
+
+	cp -a "$SRC/." "$ROOT/"
+	# The ramdisk overlay is packed with the build user's IDs; sshd also
+	# refuses key files that aren't root-owned and non-writable.
+	chown 0:0 "$w/hearth-sshd.service"
+	chown -R 0:0 "$ROOT/usr/share/hearth"
+	chmod 755 "$ROOT/usr/share/hearth"
+	chmod 644 "$ROOT/usr/share/hearth/authorized_keys" "$w/hearth-sshd.service"
+	mkdir -p "$w/multi-user.target.wants"
+	ln -sf ../hearth-sshd.service "$w/multi-user.target.wants/hearth-sshd.service"
 	sync
 	umount "$ROOT"
-	say "provision: debug USB network + shell installed into ${img##*/}"
+	say "provision: key-only root SSH installed into ${img##*/}"
 else
 	say "provision: no rootfs image to update"
 fi

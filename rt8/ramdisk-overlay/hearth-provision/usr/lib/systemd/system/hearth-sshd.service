@@ -1,0 +1,13 @@
+[Unit]
+Description=Hearth RT8 bring-up SSH (root, key-only)
+After=network.target
+
+[Service]
+ExecStartPre=/usr/bin/ssh-keygen -A
+ExecStartPre=/bin/mkdir -p /run/sshd
+ExecStart=/usr/sbin/sshd -D -o AuthorizedKeysFile=/usr/share/hearth/authorized_keys -o PermitRootLogin=prohibit-password -o PasswordAuthentication=no -o KbdInteractiveAuthentication=no -o PermitEmptyPasswords=no
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

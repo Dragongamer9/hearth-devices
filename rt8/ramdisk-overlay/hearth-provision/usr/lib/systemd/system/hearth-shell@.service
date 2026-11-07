@@ -1,8 +1,0 @@
-[Unit]
-Description=Hearth RT8 debug root shell
-
-[Service]
-ExecStart=/bin/bash -i
-StandardInput=socket
-StandardOutput=socket
-StandardError=socket
