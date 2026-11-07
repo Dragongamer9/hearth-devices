@@ -1,0 +1,66 @@
+#!/bin/sh
+# Hearth (RT8) bring-up: install a key-only root SSH service and the Android
+# self-test override from /hearth-provision into the rootfs before it boots.
+#
+# Runs in local-bottom: by then Halium has loaded the kernel modules (the
+# UFS driver is one, so userdata doesn't exist any earlier), mounted
+# userdata and moved the rootfs image to ${rootmnt}, mounted read-only.
+# Remount it read-write briefly, install, and put it back. Never fails the
+# boot.
+#
+# The UBports test image only enables SSH through an Upstart file, which
+# systemd (24.04) ignores. Ubuntu Touch's own USB tethering provides the
+# network (tablet at 10.15.19.82).
+PREREQ=""
+prereqs() { echo "$PREREQ"; }
+case "$1" in prereqs) prereqs; exit 0;; esac
+
+say() { echo "hearth: $*" > /dev/kmsg; }
+SRC=/hearth-provision
+ROOT=${rootmnt:-/root}
+
+say "provision: start (root $ROOT)"
+[ -d "$SRC" ] || { say "provision: $SRC missing"; exit 0; }
+[ -d "$ROOT/usr/lib/systemd/system" ] || { say "provision: no systemd rootfs at $ROOT"; exit 0; }
+
+was_ro=""
+if grep -q " $ROOT [^ ]* ro[, ]" /proc/mounts; then
+	was_ro=1
+	mount -o remount,rw "$ROOT" 2>/dev/null || { say "provision: cannot remount $ROOT rw"; exit 0; }
+fi
+
+w="$ROOT/usr/lib/systemd/system"
+# Remove the earlier unauthenticated shell and USB-network service if a
+# previous build installed them.
+rm -f "$w/hearth-usbnet.service" "$w/hearth-shell.socket" "$w/hearth-shell@.service" \
+	"$w/multi-user.target.wants/hearth-usbnet.service" \
+	"$w/sockets.target.wants/hearth-shell.socket"
+rm -rf "$ROOT/usr/libexec/hearth"
+
+# Copy file by file (never cp -a the tree: that would stamp the build user's
+# IDs and modes onto existing system directories like /usr, /var). All files
+# are root-owned and read-only for others; sshd also refuses key files that
+# aren't.
+put() { # put <relative path>
+	mkdir -p "$ROOT/$(dirname "$1")"
+	cat "$SRC/$1" > "$ROOT/$1"
+	chown 0:0 "$ROOT/$1"
+	chmod 644 "$ROOT/$1"
+}
+mkdir -p "$ROOT/usr/share/hearth"
+chown 0:0 "$ROOT/usr/share/hearth"
+chmod 755 "$ROOT/usr/share/hearth"
+put usr/share/hearth/authorized_keys
+put usr/lib/systemd/system/hearth-sshd.service
+put var/lib/lxc/android/overrides/init.mt8781.rc
+mkdir -p "$w/multi-user.target.wants"
+ln -sf ../hearth-sshd.service "$w/multi-user.target.wants/hearth-sshd.service"
+
+if [ -x "$ROOT/usr/sbin/sshd" ]; then
+	say "provision: key-only root SSH + Android self-test override installed"
+else
+	say "provision: installed, but $ROOT/usr/sbin/sshd is missing"
+fi
+sync
+[ -n "$was_ro" ] && mount -o remount,ro "$ROOT"
+exit 0

@@ -1,2 +1,4 @@
 /scripts/local-bottom/hearth-vendor-links "$@"
 [ -e /conf/param.conf ] && . /conf/param.conf
+/scripts/local-bottom/hearth-provision "$@"
+[ -e /conf/param.conf ] && . /conf/param.conf
