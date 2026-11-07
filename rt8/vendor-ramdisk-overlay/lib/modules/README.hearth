@@ -1,0 +1,5 @@
+modules.load          loaded by the Halium initramfs at boot.
+modules.load.android  only packed into the ramdisk (make-bootimage.sh reads
+                      modules.load*); never loaded at boot. Android's init
+                      insmods these itself from /vendor/lib/modules, which
+                      hearth-provision points at our copies.
