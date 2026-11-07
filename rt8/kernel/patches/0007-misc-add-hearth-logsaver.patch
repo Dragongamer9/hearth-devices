@@ -1,0 +1,159 @@
+diff --git a/drivers/misc/Makefile b/drivers/misc/Makefile
+index ee995ca32..4f5dd1347 100644
+--- a/drivers/misc/Makefile
++++ b/drivers/misc/Makefile
+@@ -58,4 +58,5 @@ obj-$(CONFIG_UACCE)		+= uacce/
+ obj-$(CONFIG_XILINX_SDFEC)	+= xilinx_sdfec.o
+ obj-$(CONFIG_HISI_HIKEY_USB)	+= hisi_hikey_usb.o
+ obj-$(CONFIG_UID_SYS_STATS)	+= uid_sys_stats.o
+-obj-y				+= mediatek/
+\ No newline at end of file
++obj-y				+= mediatek/
++obj-y				+= hearth_logsaver.o
+diff --git a/drivers/misc/hearth_logsaver.c b/drivers/misc/hearth_logsaver.c
+new file mode 100644
+index 000000000..976edf610
+--- /dev/null
++++ b/drivers/misc/hearth_logsaver.c
+@@ -0,0 +1,141 @@
++// SPDX-License-Identifier: GPL-2.0
++/*
++ * Hearth log saver (Oukitel RT8 bring-up).
++ *
++ * From 60 s after boot, writes the kernel log to the last 16 MiB of the
++ * "expdb" partition every 30 s for the first 10 minutes, framed by
++ * HEARTH-DMESG-BEGIN / HEARTH-DMESG-END, so a boot that never reaches a
++ * shell or USB can still be debugged by reading expdb with mtkclient.
++ *
++ * It only ever writes inside expdb's last 16 MiB, and only if the
++ * partition is at least 128 MiB, the size on the RT8.
++ */
++#define pr_fmt(fmt) "hearth-logsaver: " fmt
++
++#include <linux/bio.h>
++#include <linux/blkdev.h>
++#include <linux/genhd.h>
++#include <linux/init.h>
++#include <linux/kernel.h>
++#include <linux/kmsg_dump.h>
++#include <linux/mm.h>
++#include <linux/string.h>
++#include <linux/timekeeping.h>
++#include <linux/vmalloc.h>
++#include <linux/workqueue.h>
++
++#define HLS_PART	"expdb"
++#define HLS_MIN_SIZE	(128ULL << 20)
++#define HLS_OFFSET	(112ULL << 20)
++#define HLS_BUF_SIZE	(4U << 20)
++#define HLS_FIRST_MS	60000
++#define HLS_EVERY_MS	30000
++#define HLS_RUNS	20
++
++static struct delayed_work hls_work;
++static int hls_run;
++
++static dev_t hls_find_part(void)
++{
++	struct class_dev_iter iter;
++	struct device *dev;
++	dev_t devt = 0;
++
++	class_dev_iter_init(&iter, &block_class, NULL, &part_type);
++	while ((dev = class_dev_iter_next(&iter))) {
++		struct hd_struct *part = dev_to_part(dev);
++
++		if (part->info && !strcmp(part->info->volname, HLS_PART)) {
++			devt = dev->devt;
++			break;
++		}
++	}
++	class_dev_iter_exit(&iter);
++	return devt;
++}
++
++static int hls_write(struct block_device *bdev, u64 off, char *buf, size_t len)
++{
++	size_t done;
++
++	for (done = 0; done < len; done += PAGE_SIZE) {
++		struct bio *bio = bio_alloc(GFP_KERNEL, 1);
++		int ret;
++
++		if (!bio)
++			return -ENOMEM;
++		bio_set_dev(bio, bdev);
++		bio->bi_iter.bi_sector = (off + done) >> 9;
++		bio->bi_opf = REQ_OP_WRITE | REQ_SYNC;
++		if (bio_add_page(bio, vmalloc_to_page(buf + done), PAGE_SIZE, 0) != PAGE_SIZE) {
++			bio_put(bio);
++			return -EIO;
++		}
++		ret = submit_bio_wait(bio);
++		bio_put(bio);
++		if (ret)
++			return ret;
++	}
++	return blkdev_issue_flush(bdev, GFP_KERNEL);
++}
++
++static void hls_save(struct work_struct *work)
++{
++	const fmode_t mode = FMODE_READ | FMODE_WRITE;
++	struct kmsg_dumper dumper = { .active = true };
++	struct block_device *bdev;
++	size_t head, len = 0, total;
++	char *buf;
++	dev_t devt;
++	int ret;
++
++	hls_run++;
++	devt = hls_find_part();
++	if (!devt) {
++		pr_warn("no %s partition yet\n", HLS_PART);
++		goto again;
++	}
++
++	buf = vzalloc(HLS_BUF_SIZE);
++	if (!buf)
++		goto again;
++
++	head = scnprintf(buf, 128, "HEARTH-DMESG-BEGIN run %d uptime %llu s\n",
++			 hls_run, (unsigned long long)ktime_get_boottime_seconds());
++	kmsg_dump_rewind(&dumper);
++	/* Leave room for the end marker; this keeps the newest records. */
++	kmsg_dump_get_buffer(&dumper, false, buf + head,
++			     HLS_BUF_SIZE - head - 64, &len);
++	total = head + len;
++	total += scnprintf(buf + total, 64, "\nHEARTH-DMESG-END\n");
++	total = round_up(total, PAGE_SIZE);
++
++	bdev = blkdev_get_by_dev(devt, mode, NULL);
++	if (IS_ERR(bdev)) {
++		pr_warn("open %s failed: %ld\n", HLS_PART, PTR_ERR(bdev));
++		vfree(buf);
++		goto again;
++	}
++	if (i_size_read(bdev->bd_inode) < HLS_MIN_SIZE) {
++		pr_warn("%s is smaller than expected, not writing\n", HLS_PART);
++		blkdev_put(bdev, mode);
++		vfree(buf);
++		return;
++	}
++	ret = hls_write(bdev, HLS_OFFSET, buf, total);
++	blkdev_put(bdev, mode);
++	vfree(buf);
++	pr_info("run %d: saved %zu bytes of log to %s (%d)\n", hls_run, len, HLS_PART, ret);
++
++again:
++	if (hls_run < HLS_RUNS)
++		schedule_delayed_work(&hls_work, msecs_to_jiffies(HLS_EVERY_MS));
++}
++
++static int __init hls_init(void)
++{
++	INIT_DELAYED_WORK(&hls_work, hls_save);
++	schedule_delayed_work(&hls_work, msecs_to_jiffies(HLS_FIRST_MS));
++	return 0;
++}
++late_initcall(hls_init);
