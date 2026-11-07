@@ -22,7 +22,9 @@ setup() {
 }
 
 bind() {
-	udc=$(ls /sys/class/udc 2>/dev/null | head -1)
+	# The real port is musb-hdrc; never use a dummy_udc test controller.
+	udc=$(ls /sys/class/udc 2>/dev/null | grep -v dummy | grep musb | head -1)
+	[ -n "$udc" ] || udc=$(ls /sys/class/udc 2>/dev/null | grep -v dummy | head -1)
 	[ -n "$udc" ] || return 1
 	[ "$(cat "$G/UDC" 2>/dev/null)" = "$udc" ] && return 0
 	for u in /sys/kernel/config/usb_gadget/*/UDC; do

@@ -12,9 +12,10 @@ SRC=/hearth-provision
 DATA=/hearth-data
 ROOT=/hearth-root
 
-[ -d "$SRC" ] || exit 0
+say "provision: start"
+[ -d "$SRC" ] || { say "provision: $SRC missing"; exit 0; }
 part=/dev/disk/by-partlabel/userdata
-[ -e "$part" ] || exit 0
+[ -e "$part" ] || { say "provision: no userdata"; exit 0; }
 
 mkdir -p "$DATA" "$ROOT"
 mount -t ext4 "$part" "$DATA" 2>/dev/null || { say "provision: cannot mount userdata"; exit 0; }
