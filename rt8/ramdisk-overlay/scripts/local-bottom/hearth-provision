@@ -91,11 +91,15 @@ fi
 MODSRC=/lib/modules
 MODDST="$ROOT/usr/lib/hearth-modules"
 if [ -f "$MODSRC/modules.dep" ]; then
-	if ! cmp -s "$MODSRC/modules.dep" "$MODDST/modules.dep" 2>/dev/null; then
+	# modules.dep lists every built module, not just the ones packed, so
+	# compare the packed file list and sizes instead.
+	stamp="$(uname -r) $(ls -ln "$MODSRC" | md5sum)"
+	if [ "$stamp" != "$(cat "$MODDST/.hearth-stamp" 2>/dev/null)" ]; then
 		rm -rf "$MODDST.new"
 		mkdir -p "$MODDST.new"
 		if cp "$MODSRC"/*.ko "$MODSRC"/modules.* "$MODDST.new"/ 2>/dev/null; then
 			rm -rf "$MODDST"
+			echo "$stamp" > "$MODDST.new/.hearth-stamp"
 			mv "$MODDST.new" "$MODDST"
 			chmod 755 "$MODDST"
 			say "provision: kernel modules copied for the Android container ($(ls "$MODDST" | wc -l) files)"
