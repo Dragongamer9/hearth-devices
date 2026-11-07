@@ -75,12 +75,37 @@ if [ -f "$cfg" ]; then
 # hearth-begin
 lxc.mount.entry = /usr/share/hearth/android/vold.rc system/etc/init/vold.rc none bind,ro,optional 0 0
 lxc.mount.entry = /usr/share/hearth/android/init.boringssl.zygote64_32.rc system/etc/init/hw/init.boringssl.zygote64_32.rc none bind,ro,optional 0 0
+lxc.mount.entry = /usr/lib/hearth-modules vendor_dlkm/lib/modules none bind,ro,optional 0 0
 # hearth-end
 LXC
 	say "provision: Android init overrides added to the container config"
 else
 	say "provision: $cfg missing, Android overrides not added"
 fi
+# Our kernel's modules, for the Android container. Android's init loads
+# Wi-Fi/Bluetooth/GPS drivers itself with "insmod /vendor/lib/modules/X.ko"
+# (a link to /vendor_dlkm/lib/modules), i.e. Oukitel's builds, which our
+# kernel rejects. Copy the boot image's modules (built with this kernel)
+# into the rootfs and bind them over vendor_dlkm/lib/modules in the
+# container. Only copy when they changed, to spare the flash.
+MODSRC=/lib/modules
+MODDST="$ROOT/usr/lib/hearth-modules"
+if [ -f "$MODSRC/modules.dep" ]; then
+	if ! cmp -s "$MODSRC/modules.dep" "$MODDST/modules.dep" 2>/dev/null; then
+		rm -rf "$MODDST.new"
+		mkdir -p "$MODDST.new"
+		if cp "$MODSRC"/*.ko "$MODSRC"/modules.* "$MODDST.new"/ 2>/dev/null; then
+			rm -rf "$MODDST"
+			mv "$MODDST.new" "$MODDST"
+			chmod 755 "$MODDST"
+			say "provision: kernel modules copied for the Android container ($(ls "$MODDST" | wc -l) files)"
+		else
+			rm -rf "$MODDST.new"
+			say "provision: copying kernel modules failed (rootfs full?)"
+		fi
+	fi
+fi
+
 mkdir -p "$w/multi-user.target.wants"
 ln -sf ../hearth-sshd.service "$w/multi-user.target.wants/hearth-sshd.service"
 
