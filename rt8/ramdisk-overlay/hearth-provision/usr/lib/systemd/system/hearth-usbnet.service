@@ -1,0 +1,13 @@
+[Unit]
+Description=Hearth RT8 debug USB networking (192.168.2.15)
+After=sys-kernel-config.mount lxc@android.service
+Wants=sys-kernel-config.mount
+
+[Service]
+Type=simple
+ExecStart=/usr/libexec/hearth/usbnet
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

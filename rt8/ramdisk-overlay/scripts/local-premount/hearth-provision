@@ -1,0 +1,43 @@
+#!/bin/sh
+# Hearth (RT8) bring-up: install the debug USB-network and shell services
+# from /hearth-provision into the rootfs image on userdata before it boots.
+# The UBports test image only enables USB tethering/SSH through Upstart
+# files, which systemd (24.04) ignores. Never fails the boot.
+PREREQ=""
+prereqs() { echo "$PREREQ"; }
+case "$1" in prereqs) prereqs; exit 0;; esac
+
+say() { echo "hearth: $*" > /dev/kmsg; }
+SRC=/hearth-provision
+DATA=/hearth-data
+ROOT=/hearth-root
+
+[ -d "$SRC" ] || exit 0
+part=/dev/disk/by-partlabel/userdata
+[ -e "$part" ] || exit 0
+
+mkdir -p "$DATA" "$ROOT"
+mount -t ext4 "$part" "$DATA" 2>/dev/null || { say "provision: cannot mount userdata"; exit 0; }
+img=""
+for f in ubuntu.img rootfs.img; do
+	[ -f "$DATA/$f" ] && { img="$DATA/$f"; break; }
+done
+if [ -n "$img" ] && mount -o loop,rw "$img" "$ROOT" 2>/dev/null; then
+	cp -a "$SRC/." "$ROOT/"
+	# The ramdisk overlay is packed with the build user's IDs.
+	chown -R 0:0 "$ROOT/usr/libexec/hearth"
+	for f in hearth-usbnet.service hearth-shell.socket hearth-shell@.service; do
+		chown 0:0 "$ROOT/usr/lib/systemd/system/$f"
+	done
+	w="$ROOT/usr/lib/systemd/system"
+	mkdir -p "$w/multi-user.target.wants" "$w/sockets.target.wants"
+	ln -sf ../hearth-usbnet.service "$w/multi-user.target.wants/hearth-usbnet.service"
+	ln -sf ../hearth-shell.socket "$w/sockets.target.wants/hearth-shell.socket"
+	sync
+	umount "$ROOT"
+	say "provision: debug USB network + shell installed into ${img##*/}"
+else
+	say "provision: no rootfs image to update"
+fi
+umount "$DATA"
+exit 0

@@ -1,4 +1,6 @@
 /scripts/local-premount/hearth-wait-userdata "$@"
 [ -e /conf/param.conf ] && . /conf/param.conf
+/scripts/local-premount/hearth-provision "$@"
+[ -e /conf/param.conf ] && . /conf/param.conf
 /scripts/local-premount/resume "$@"
 [ -e /conf/param.conf ] && . /conf/param.conf
