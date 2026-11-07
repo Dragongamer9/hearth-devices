@@ -1,0 +1,14 @@
+diff --git a/drivers/input/touchscreen/mediatek/chipone_tddi/cts_platform.c b/drivers/input/touchscreen/mediatek/chipone_tddi/cts_platform.c
+index 1efc6b16c..90bc9d44d 100644
+--- a/drivers/input/touchscreen/mediatek/chipone_tddi/cts_platform.c
++++ b/drivers/input/touchscreen/mediatek/chipone_tddi/cts_platform.c
+@@ -68,6 +68,9 @@ int cts_plat_set_cs(struct cts_platform_data *pdata, int val)
+     else
+         pinctrl_select_state(pdata->pinctrl1, pdata->spi_cs_low);
+ #else
++    /* Oukitel's DT has no chipone,cs-gpio; the SPI controller drives CS. */
++    if (!gpio_is_valid(pdata->cs_gpio))
++        return 0;
+     if (val)
+         gpio_set_value(pdata->cs_gpio, 1);
+     else
