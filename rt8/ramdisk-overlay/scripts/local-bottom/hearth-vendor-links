@@ -1,0 +1,43 @@
+#!/bin/sh
+# Hearth (RT8): give the vendor-side dynamic partitions plain names.
+#
+# lxc-android-config mounts /dev/mapper/<name> first and only then tries
+# <name><slot suffix>, with the suffix taken from bootconfig. On the RT8 the
+# active slot is B, but slot B's dynamic partitions are an unmerged Virtual
+# A/B snapshot (empty mappings), so /vendor never got mounted and Android's
+# init crash-looped. Point /dev/mapper/vendor (etc.) at whichever slot's
+# mapping actually has data, preferring the active one.
+PREREQ=""
+prereqs() { echo "$PREREQ"; }
+case "$1" in prereqs) prereqs; exit 0;; esac
+
+say() { echo "hearth: $*" > /dev/kmsg; }
+
+sectors() {
+	# Size in 512-byte sectors of the device-mapper device named $1, 0 if
+	# missing. (dmsetup mknodes makes real nodes, not dm-N symlinks, so look
+	# the name up in sysfs.)
+	for n in /sys/block/dm-*/dm/name; do
+		[ -e "$n" ] || continue
+		if [ "$(cat "$n")" = "$1" ]; then
+			cat "${n%/dm/name}/size"
+			return
+		fi
+	done
+	echo 0
+}
+
+active=$(grep -o 'androidboot\.slot_suffix = ".."' /proc/bootconfig 2>/dev/null | cut -d '"' -f2)
+case "$active" in _a) other=_b;; _b) other=_a;; *) active=_a; other=_b;; esac
+
+for p in vendor odm vendor_dlkm odm_dlkm; do
+	[ -e "/dev/mapper/$p" ] && continue
+	for s in "$active" "$other"; do
+		if [ "$(sectors "$p$s")" -gt 0 ]; then
+			ln -s "$p$s" "/dev/mapper/$p"
+			say "/dev/mapper/$p -> $p$s"
+			break
+		fi
+	done
+done
+exit 0
