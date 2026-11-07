@@ -1,7 +1,27 @@
 diff --git a/drivers/input/touchscreen/mediatek/chipone_tddi/cts_driver.c b/drivers/input/touchscreen/mediatek/chipone_tddi/cts_driver.c
-index 1a9a7f07a..dcc16053f 100644
+index 1a9a7f07a..50aa5f433 100644
 --- a/drivers/input/touchscreen/mediatek/chipone_tddi/cts_driver.c
 +++ b/drivers/input/touchscreen/mediatek/chipone_tddi/cts_driver.c
+@@ -399,13 +399,13 @@ static int cts_driver_probe(struct spi_device *client)
+     struct cts_firmware *firmware = NULL;
+     int ret = 0;
+ #ifndef CONFIG_CTS_I2C_HOST  //jnier add 20231017
+-	int cts_spi_support = 0;
++	/* The Volla ODM table (csci) enables this per device; Oukitel's
++	 * bootloader passes no such key, so default to supported and let
++	 * csci switch it off only when it says so. */
++	int cts_spi_support = 1;
+ #if IS_ENABLED(CONFIG_MID_CSCI_SUPPORT)
+-	if (csci_exist("touchpanel.cts.spi")) {
+-		if (csci_integer("touchpanel.cts.spi", 0) > 0) {
+-			cts_spi_support = csci_integer("touchpanel.cts.spi", 0);
+-		}
+-	}
++	if (csci_exist("touchpanel.cts.spi"))
++		cts_spi_support = csci_integer("touchpanel.cts.spi", 0);
+ #endif
+ 	cts_info("%s start\n",__func__);
+ 	if(cts_spi_support == 0){
 @@ -1058,6 +1058,9 @@ static const struct attribute_group *cts_driver_config_groups[] = {
  #ifdef CONFIG_CTS_OF
  static const struct of_device_id cts_driver_of_match_table[] = {
