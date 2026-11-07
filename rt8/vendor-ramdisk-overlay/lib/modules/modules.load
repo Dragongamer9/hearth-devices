@@ -151,6 +151,7 @@ mtk-mbox-mailbox.ko
 irq-dbg.ko
 mtk-socinfo.ko
 chipone-tddi_i2c.ko
+chipone-tddi.ko
 focaltech_touch_i2c_v42.ko
 mt6375.ko
 mt6375-adc.ko

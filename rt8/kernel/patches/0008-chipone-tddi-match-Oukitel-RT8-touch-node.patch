@@ -1,0 +1,14 @@
+diff --git a/drivers/input/touchscreen/mediatek/chipone_tddi/cts_driver.c b/drivers/input/touchscreen/mediatek/chipone_tddi/cts_driver.c
+index 1a9a7f07a..dcc16053f 100644
+--- a/drivers/input/touchscreen/mediatek/chipone_tddi/cts_driver.c
++++ b/drivers/input/touchscreen/mediatek/chipone_tddi/cts_driver.c
+@@ -1058,6 +1058,9 @@ static const struct attribute_group *cts_driver_config_groups[] = {
+ #ifdef CONFIG_CTS_OF
+ static const struct of_device_id cts_driver_of_match_table[] = {
+     {.compatible = CFG_CTS_OF_DEVICE_ID_NAME, },
++    /* Oukitel RT8: the stock DT names its SPI touch node "focaltech,fts"
++     * and carries the chipone,* properties for the Chipone TDDI panel. */
++    {.compatible = "focaltech,fts", },
+     { },
+ };
+ 
