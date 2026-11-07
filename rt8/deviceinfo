@@ -19,7 +19,12 @@ deviceinfo_kernel_defconfig="gki_defconfig mimir.config entry_level.config haliu
 # The rootfs and Android system image live on userdata (Halium "legacy"
 # layout: /data/ubuntu.img), so no systempart= is needed. RT8's LK also
 # overwrites the start of this string, so keep nothing important here.
-deviceinfo_kernel_cmdline="hearth.lk_pad=xxxxxxxxxxxxxxxxxxxxxxxx"
+# The RT8's dynamic partitions only exist with the _a suffix: its last
+# Android OTA to slot B was never merged (super's slot-1 metadata still lists
+# vendor_b-cow etc.) and the rest of that snapshot lived on the wiped
+# userdata. Slot A (vendor_a, system_a, ...) is intact, so point Halium's
+# initramfs and lxc-android-config at it while our kernel boots from boot_b.
+deviceinfo_kernel_cmdline="hearth.lk_pad=xxxxxxxxxxxxxxxxxxxxxxxx androidboot.slot_suffix=_a"
 deviceinfo_kernel_vendor_cmdline="bootopt=64S3,32N2,64N2"
 deviceinfo_kernel_clang_compile="true"
 deviceinfo_kernel_llvm_compile="true"
