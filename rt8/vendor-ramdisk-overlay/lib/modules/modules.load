@@ -159,6 +159,7 @@ mt6375-auxadc.ko
 mt6375-charger.ko
 tcpc_mt6375.ko
 st21nfc.ko
+fhctl.ko
 mtk_gpufreq_mt6789.ko
 mali_mgm_.ko
 mali_prot_alloc_.ko
