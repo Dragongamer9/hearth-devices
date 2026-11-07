@@ -1,0 +1,8 @@
+# Hearth RT8: run only the 64-bit BoringSSL self-tests. The vendor advertises
+# 32-bit ABIs, but the system image's conscrypt APEX has no 32-bit test
+# binary, so the 32-bit APEX test exits 127 and its reboot_on_failure stops
+# the Android container.
+on init && property:ro.product.cpu.abilist64=*
+    exec_start boringssl_self_test64
+on property:apexd.status=ready && property:ro.product.cpu.abilist64=*
+    exec_start boringssl_self_test_apex64

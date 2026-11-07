@@ -1,6 +1,6 @@
 #!/bin/sh
-# Hearth (RT8) bring-up: install a key-only root SSH service and the Android
-# self-test override from /hearth-provision into the rootfs before it boots.
+# Hearth (RT8) bring-up: install a key-only root SSH service and two Android
+# init overrides from /hearth-provision into the rootfs before it boots.
 #
 # Runs in local-bottom: by then Halium has loaded the kernel modules (the
 # UFS driver is one, so userdata doesn't exist any earlier), mounted
@@ -52,12 +52,34 @@ chown 0:0 "$ROOT/usr/share/hearth"
 chmod 755 "$ROOT/usr/share/hearth"
 put usr/share/hearth/authorized_keys
 put usr/lib/systemd/system/hearth-sshd.service
-put var/lib/lxc/android/overrides/init.mt8781.rc
+put usr/share/hearth/android/vold.rc
+put usr/share/hearth/android/init.boringssl.zygote64_32.rc
+# An earlier build left this here; the container never picked it up.
+rm -f "$ROOT/var/lib/lxc/android/overrides/init.mt8781.rc"
+
+# Bind our two Android init files over the system image's copies inside the
+# container. lxc applies mount entries after it has set up the rootfs and
+# before Android's init starts. The system image itself stays untouched and
+# read-only; "optional" means a missing file can never stop the container.
+cfg="$ROOT/var/lib/lxc/android/config"
+if [ -f "$cfg" ]; then
+	# Replace our block if a previous build added one (never add it twice).
+	sed -i '/^# hearth-begin$/,/^# hearth-end$/d' "$cfg" 2>/dev/null
+	grep -q '^# hearth-begin$' "$cfg" || cat >> "$cfg" <<'LXC'
+# hearth-begin
+lxc.mount.entry = /usr/share/hearth/android/vold.rc system/etc/init/vold.rc none bind,ro,optional 0 0
+lxc.mount.entry = /usr/share/hearth/android/init.boringssl.zygote64_32.rc system/etc/init/hw/init.boringssl.zygote64_32.rc none bind,ro,optional 0 0
+# hearth-end
+LXC
+	say "provision: Android init overrides added to the container config"
+else
+	say "provision: $cfg missing, Android overrides not added"
+fi
 mkdir -p "$w/multi-user.target.wants"
 ln -sf ../hearth-sshd.service "$w/multi-user.target.wants/hearth-sshd.service"
 
 if [ -x "$ROOT/usr/sbin/sshd" ]; then
-	say "provision: key-only root SSH + Android self-test override installed"
+	say "provision: key-only root SSH installed"
 else
 	say "provision: installed, but $ROOT/usr/sbin/sshd is missing"
 fi

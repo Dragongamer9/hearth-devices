@@ -1,0 +1,12 @@
+# Hearth RT8: Android 14's vold.rc without "reboot_on_failure". In the Halium
+# container a vold failure (it can't label /data/data without SELinux) would
+# otherwise stop the whole Android container ~16 s after it starts.
+service vold /system/bin/vold \
+        --blkid_context=u:r:blkid:s0 --blkid_untrusted_context=u:r:blkid_untrusted:s0 \
+        --fsck_context=u:r:fsck:s0 --fsck_untrusted_context=u:r:fsck_untrusted:s0
+    class core
+    ioprio be 2
+    task_profiles ProcessCapacityHigh
+    shutdown critical
+    group root reserved_disk
+    user root
