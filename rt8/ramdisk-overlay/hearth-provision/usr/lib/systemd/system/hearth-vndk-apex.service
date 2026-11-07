@@ -1,0 +1,14 @@
+[Unit]
+Description=Hearth: mount the stock VNDK APEX the vendor needs
+DefaultDependencies=no
+Requires=lxc-android-config-mount-apexes.service
+After=lxc-android-config-mount-apexes.service mount-android-partitions.service
+Before=lxc-android-config.service sysinit.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/bin/python3 /usr/libexec/hearth/vndk-apex
+
+[Install]
+WantedBy=lxc-android-config.service

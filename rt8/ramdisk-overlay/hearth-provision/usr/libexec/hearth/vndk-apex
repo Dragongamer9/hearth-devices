@@ -1,0 +1,35 @@
+#!/usr/bin/python3
+# Hearth RT8: the stock vendor was built against an older VNDK
+# (ro.vndk.version, 31 on the RT8) than the system image ships (v34). Mount
+# that VNDK APEX from the stock system_ext partition (read-only) at
+# /android/apex/com.android.vndk.v<N> before the container starts, or
+# linkerconfig aborts and nothing in the container can link.
+import os, re, subprocess, zipfile
+
+ver = None
+for f in ("/android/vendor/build.prop", "/android/vendor/default.prop"):
+    try:
+        m = re.search(r"^ro\.vndk\.version=(\S+)", open(f).read(), re.M)
+        if m:
+            ver = m.group(1)
+            break
+    except OSError:
+        pass
+print("vendor VNDK version:", ver)
+target = f"/android/apex/com.android.vndk.v{ver}"
+if not ver or os.path.ismount(target):
+    raise SystemExit(0)
+
+src = "/run/hearth/stock_system_ext"
+os.makedirs(src, exist_ok=True)
+if not os.path.ismount(src):
+    subprocess.run(["mount", "-o", "ro", "/dev/mapper/system_ext_a", src], check=True)
+apex = f"{src}/apex/com.android.vndk.v{ver}.apex"
+if not os.path.isfile(apex):
+    print("no", apex, "- leaving it")
+    raise SystemExit(0)
+with zipfile.ZipFile(apex) as zf, zf.open("apex_payload.img") as p:
+    off = p._orig_compress_start
+os.makedirs(target, exist_ok=True)
+subprocess.run(["mount", "-o", f"loop,offset={off},ro", apex, target], check=True)
+print("mounted", apex, "at", target)

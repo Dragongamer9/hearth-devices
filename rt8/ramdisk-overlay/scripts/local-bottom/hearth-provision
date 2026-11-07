@@ -54,6 +54,12 @@ put usr/share/hearth/authorized_keys
 put usr/lib/systemd/system/hearth-sshd.service
 put usr/share/hearth/android/vold.rc
 put usr/share/hearth/android/init.boringssl.zygote64_32.rc
+put usr/lib/systemd/system/lxc-android-config-mount-apexes.service.d/hearth-all-apexes.conf
+put usr/lib/systemd/system/hearth-vndk-apex.service
+put usr/libexec/hearth/vndk-apex
+chmod 755 "$ROOT/usr/libexec/hearth" "$ROOT/usr/libexec/hearth/vndk-apex"
+mkdir -p "$w/lxc-android-config.service.wants"
+ln -sf ../hearth-vndk-apex.service "$w/lxc-android-config.service.wants/hearth-vndk-apex.service"
 # An earlier build left this here; the container never picked it up.
 rm -f "$ROOT/var/lib/lxc/android/overrides/init.mt8781.rc"
 
