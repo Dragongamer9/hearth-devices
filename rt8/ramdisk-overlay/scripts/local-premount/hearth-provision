@@ -15,8 +15,16 @@ ROOT=/hearth-root
 
 say "provision: start"
 [ -d "$SRC" ] || { say "provision: $SRC missing"; exit 0; }
-part=/dev/disk/by-partlabel/userdata
-[ -e "$part" ] || { say "provision: no userdata"; exit 0; }
+find_part() {
+	for u in /sys/class/block/*/uevent; do
+		grep -q "^PARTNAME=$1\$" "$u" 2>/dev/null || continue
+		echo "/dev/$(sed -n 's/^DEVNAME=//p' "$u")"
+		return 0
+	done
+	return 1
+}
+part=$(find_part userdata)
+[ -n "$part" ] && [ -e "$part" ] || { say "provision: no userdata ($part)"; exit 0; }
 
 mkdir -p "$DATA" "$ROOT"
 mount -t ext4 "$part" "$DATA" 2>/dev/null || { say "provision: cannot mount userdata"; exit 0; }
@@ -33,18 +41,27 @@ if [ -n "$img" ] && mount -o loop,rw "$img" "$ROOT" 2>/dev/null; then
 		"$w/sockets.target.wants/hearth-shell.socket"
 	rm -rf "$ROOT/usr/libexec/hearth"
 
-	cp -a "$SRC/." "$ROOT/"
-	# The ramdisk overlay is packed with the build user's IDs; sshd also
-	# refuses key files that aren't root-owned and non-writable.
-	chown 0:0 "$w/hearth-sshd.service"
-	chown -R 0:0 "$ROOT/usr/share/hearth"
+	# Copy file by file (never cp -a the tree: that would stamp the build
+	# user's IDs and modes onto existing system directories like /usr, /var).
+	# Everything is root-owned and read-only for others; sshd also refuses
+	# key files that aren't.
+	put() { # put <relative path>
+		mkdir -p "$ROOT/$(dirname "$1")"
+		cat "$SRC/$1" > "$ROOT/$1"
+		chown 0:0 "$ROOT/$1"
+		chmod 644 "$ROOT/$1"
+	}
+	mkdir -p "$ROOT/usr/share/hearth"
+	chown 0:0 "$ROOT/usr/share/hearth"
 	chmod 755 "$ROOT/usr/share/hearth"
-	chmod 644 "$ROOT/usr/share/hearth/authorized_keys" "$w/hearth-sshd.service"
+	put usr/share/hearth/authorized_keys
+	put usr/lib/systemd/system/hearth-sshd.service
+	put var/lib/lxc/android/overrides/init.mt8781.rc
 	mkdir -p "$w/multi-user.target.wants"
 	ln -sf ../hearth-sshd.service "$w/multi-user.target.wants/hearth-sshd.service"
 	sync
 	umount "$ROOT"
-	say "provision: key-only root SSH installed into ${img##*/}"
+	say "provision: key-only root SSH + Android self-test override installed into ${img##*/}"
 else
 	say "provision: no rootfs image to update"
 fi

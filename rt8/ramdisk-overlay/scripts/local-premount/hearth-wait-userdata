@@ -1,15 +1,29 @@
 #!/bin/sh
 # Hearth (RT8): UFS partitions show up a few seconds after Halium starts
-# looking for userdata, which made it panic with "Couldn't find data
-# partition". Wait for the partition label to appear (up to 30 s).
+# looking for userdata. Wait (up to 30 s) until the kernel lists a partition
+# named userdata. /dev/disk/by-partlabel isn't populated this early, so look
+# the name up in sysfs instead.
 PREREQ=""
 prereqs() { echo "$PREREQ"; }
 case "$1" in prereqs) prereqs; exit 0;; esac
 
+find_part() {
+	for u in /sys/class/block/*/uevent; do
+		grep -q "^PARTNAME=$1\$" "$u" 2>/dev/null || continue
+		echo "/dev/$(sed -n 's/^DEVNAME=//p' "$u")"
+		return 0
+	done
+	return 1
+}
+
 i=0
-while [ ! -e /dev/disk/by-partlabel/userdata ] && [ $i -lt 30 ]; do
+while ! dev=$(find_part userdata) && [ $i -lt 30 ]; do
 	sleep 1
 	i=$((i + 1))
 done
-echo "hearth: userdata ready after $i s" > /dev/kmsg
+if [ -n "$dev" ]; then
+	echo "hearth: userdata is $dev (after $i s)" > /dev/kmsg
+else
+	echo "hearth: userdata not found after $i s" > /dev/kmsg
+fi
 exit 0
