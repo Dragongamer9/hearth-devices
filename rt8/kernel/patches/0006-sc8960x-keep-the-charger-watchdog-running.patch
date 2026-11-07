@@ -1,0 +1,73 @@
+diff --git a/drivers/power/supply/sc8960x_charger.c b/drivers/power/supply/sc8960x_charger.c
+index affeca5..f88e39d 100644
+--- a/drivers/power/supply/sc8960x_charger.c
++++ b/drivers/power/supply/sc8960x_charger.c
+@@ -119,6 +119,7 @@ struct sc8960x {
+ 	struct power_supply *psy;
+ 	bool vbus_good;
+ 	struct delayed_work force_detect_dwork;
++	struct delayed_work wdt_dwork;
+ 	u8 force_detect_count;
+ #if IS_ENABLED(CONFIG_CHARGER_SC8851) //Leo 20230625
+ 	struct power_supply *cp_psy;
+@@ -1280,7 +1281,15 @@ static int sc8960x_init_device(struct sc8960x *sc)
+ {
+ 	int ret;
+ 
+-	sc8960x_disable_watchdog_timer(sc);
++	/*
++	 * Hearth (RT8): keep the chip's I2C watchdog running (40 s) and kick
++	 * it from sc8960x_wdt_dwork. If this kernel stops or crashes, the chip
++	 * falls back to its power-on defaults (charging enabled) instead of
++	 * keeping whatever we last wrote. With the watchdog disabled, a
++	 * "charging off" setting survived power-off and the tablet could not
++	 * charge at all until the battery was fully drained.
++	 */
++	sc8960x_set_watchdog_timer(sc, 40);
+ 
+ 	ret = sc8960x_set_stat_ctrl(sc, sc->platform_data->statctrl);
+ 	if (ret)
+@@ -1618,6 +1627,14 @@ static int sc8960x_get_icl(struct charger_device *chg_dev, u32 *curr)
+ 
+ }
+ 
++static void sc8960x_wdt_dwork_handler(struct work_struct *work)
++{
++	struct sc8960x *sc = container_of(work, struct sc8960x, wdt_dwork.work);
++
++	sc8960x_reset_watchdog_timer(sc);
++	schedule_delayed_work(&sc->wdt_dwork, msecs_to_jiffies(15000));
++}
++
+ static int sc8960x_kick_wdt(struct charger_device *chg_dev)
+ {
+ 	struct sc8960x *sc = dev_get_drvdata(&chg_dev->dev);
+@@ -2190,6 +2207,8 @@ static int sc8960x_charger_probe(struct i2c_client *client,
+ 
+ 	INIT_DELAYED_WORK(&sc->psy_dwork, sc8960x_inform_psy_dwork_handler);
+ 	INIT_DELAYED_WORK(&sc->force_detect_dwork, sc8960x_force_detection_dwork_handler);
++	INIT_DELAYED_WORK(&sc->wdt_dwork, sc8960x_wdt_dwork_handler);
++	schedule_delayed_work(&sc->wdt_dwork, msecs_to_jiffies(15000));
+ 	schedule_delayed_work(&sc->psy_dwork, msecs_to_jiffies(5000));
+ 
+ 	sc->sc8690x_request_irq_wq = create_singlethread_workqueue("sc8960x_request_irq_wq");
+@@ -2232,6 +2251,7 @@ static int sc8960x_charger_remove(struct i2c_client *client)
+ {
+ 	struct sc8960x *sc = i2c_get_clientdata(client);
+ 
++	cancel_delayed_work_sync(&sc->wdt_dwork);
+ 	mutex_destroy(&sc->i2c_rw_lock);
+ 
+ 	sysfs_remove_group(&sc->dev->kobj, &sc8960x_attr_group);
+@@ -2241,7 +2261,11 @@ static int sc8960x_charger_remove(struct i2c_client *client)
+ 
+ static void sc8960x_charger_shutdown(struct i2c_client *client)
+ {
++	struct sc8960x *sc = i2c_get_clientdata(client);
+ 
++	/* Hand the chip back in its power-on defaults (charging enabled). */
++	cancel_delayed_work_sync(&sc->wdt_dwork);
++	sc8960x_reset_chip(sc);
+ }
+ 
+ static int sc8960x_suspend(struct device *dev)
