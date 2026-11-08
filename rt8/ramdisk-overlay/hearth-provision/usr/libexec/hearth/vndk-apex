@@ -36,10 +36,19 @@ def vndk_version():
     return None
 
 
+# Ubuntu Touch maps the super partition as /dev/mapper/<name>, Droidian as
+# /dev/mapper/dynpart-<name>.
+SYSTEM_EXT_DEVS = ("/dev/mapper/system_ext_a", "/dev/mapper/dynpart-system_ext_a")
+
+
 def mount_stock_system_ext():
     os.makedirs(SRC, exist_ok=True)
-    if not os.path.ismount(SRC):
-        subprocess.run(["mount", "-o", "ro", "/dev/mapper/system_ext_a", SRC], check=True)
+    if os.path.ismount(SRC):
+        return
+    dev = next((d for d in SYSTEM_EXT_DEVS if os.path.exists(d)), None)
+    if not dev:
+        raise RuntimeError("stock system_ext not mapped")
+    subprocess.run(["mount", "-o", "ro", dev, SRC], check=True)
 
 
 def mount_vndk_for_default_view(ver):

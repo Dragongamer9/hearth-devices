@@ -67,6 +67,11 @@ put usr/libexec/hearth/touch-fw
 chmod 755 "$ROOT/usr/libexec/hearth" "$ROOT/usr/libexec/hearth/vndk-apex" "$ROOT/usr/libexec/hearth/wifi-on" "$ROOT/usr/libexec/hearth/touch-fw"
 mkdir -p "$w/lxc-android-config.service.wants"
 ln -sf ../hearth-vndk-apex.service "$w/lxc-android-config.service.wants/hearth-vndk-apex.service"
+# Droidian starts the container with lxc@android instead.
+if [ -f "$w/lxc@.service" ]; then
+	mkdir -p "$w/lxc@android.service.wants"
+	ln -sf ../hearth-vndk-apex.service "$w/lxc@android.service.wants/hearth-vndk-apex.service"
+fi
 # An earlier build left this here; the container never picked it up.
 rm -f "$ROOT/var/lib/lxc/android/overrides/init.mt8781.rc"
 

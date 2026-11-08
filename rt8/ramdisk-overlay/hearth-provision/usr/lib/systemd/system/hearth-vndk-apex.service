@@ -1,9 +1,11 @@
 [Unit]
 Description=Hearth: mount the stock VNDK APEX the vendor needs
 DefaultDependencies=no
-Requires=lxc-android-config-mount-apexes.service
-After=lxc-android-config-mount-apexes.service mount-android-partitions.service
-Before=lxc-android-config.service sysinit.target
+# Ubuntu Touch: lxc-android-config(-mount-apexes). Droidian: android-mount and
+# lxc@android. Wants (not Requires), so a unit one system lacks is no problem.
+Wants=lxc-android-config-mount-apexes.service
+After=lxc-android-config-mount-apexes.service mount-android-partitions.service android-mount.service
+Before=lxc-android-config.service lxc@android.service sysinit.target
 
 [Service]
 Type=oneshot
@@ -11,4 +13,4 @@ RemainAfterExit=yes
 ExecStart=/usr/bin/python3 /usr/libexec/hearth/vndk-apex
 
 [Install]
-WantedBy=lxc-android-config.service
+WantedBy=lxc-android-config.service lxc@android.service
