@@ -1,0 +1,23 @@
+diff --git a/types/scene/wlr_scene.c b/types/scene/wlr_scene.c
+index 8b0461b1..dcc4e501 100644
+--- a/types/scene/wlr_scene.c
++++ b/types/scene/wlr_scene.c
+@@ -1812,9 +1812,17 @@ bool wlr_scene_output_build_state(struct wlr_scene_output *scene_output,
+ 		buffer_age, &render_data.damage);
+ 
+ 	// HACK: this should really be done by the compositor rather than us
+-	if (!wlr_output_handle_damage(output, &render_data.damage)) {
++	// Hearth: the renderer wants buffer coordinates (EGL partial update on the
++	// hwcomposer window); render_data.damage is in output coordinates. On a
++	// rotated output that confined drawing to a min(w,h) square.
++	pixman_region32_t hwc_damage;
++	pixman_region32_init(&hwc_damage);
++	pixman_region32_copy(&hwc_damage, &render_data.damage);
++	transform_output_damage(&hwc_damage, &render_data);
++	if (!wlr_output_handle_damage(output, &hwc_damage)) {
+ 		wlr_log(WLR_ERROR, "Error during handle_damage call");
+ 	}
++	pixman_region32_fini(&hwc_damage);
+ 
+ 	pixman_region32_t background;
+ 	pixman_region32_init(&background);
