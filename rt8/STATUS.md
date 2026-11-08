@@ -48,3 +48,10 @@ Tested with the Ubuntu Touch 24.04 image on slot B, flashed with mtkclient.
   ```
 - Write one partition per mtkclient call. Comma lists stop after the first write on this device.
 - Before the stock restore, slot A held an old Halium test boot. Slot B holds our current build.
+
+## Stock restore (2026-11-07)
+- Restored with `tools/restore-stock.sh` (every slot A partition except the preloader; userdata and
+  metadata zeroed) and `tools/write-big.sh` for super, written in 1 GiB pieces at 0x57800000.
+- Firmware: Oukitel P556_OQ_P10B_8781_U0_EEA_V2.1.5_S260828. Slot A is active; slot B still holds
+  our build (b25).
+- To return to our build later: write the saved misc.bin (slot B active) back with mtkclient.
