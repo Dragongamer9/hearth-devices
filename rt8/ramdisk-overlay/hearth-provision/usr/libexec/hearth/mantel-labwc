@@ -43,7 +43,13 @@ fi
 for f in themerc themerc-override menu.xml environment; do
 	[ -n "$rc" ] && [ -f "${rc%/*}/$f" ] && cp "${rc%/*}/$f" "$cfg/$f"
 done
+# Hearth's shared files (desktop/theme etc.), as on PCs: NIMBUS_SHARE is the
+# folder that holds desktop/shell.
+case "$shell" in */desktop/shell) export NIMBUS_SHARE="${shell%/desktop/shell}" ;; esac
 cat > "$cfg/autostart" <<'AUTO'
+# The Hearth look for apps that draw their own title bars (GTK/libadwaita, Qt),
+# the same script Hearth Desktop Mode runs on PCs.
+[ -n "$NIMBUS_SHARE" ] && [ -f "$NIMBUS_SHARE/desktop/theme/apply.sh" ] && sh "$NIMBUS_SHARE/desktop/theme/apply.sh" >/dev/null 2>&1
 dbus-update-activation-environment --systemd WAYLAND_DISPLAY XDG_CURRENT_DESKTOP XDG_SESSION_TYPE >/dev/null 2>&1 &
 # Keep the shell up: restart it if it closes (labwc keeps running either way).
 ( while pgrep -x labwc >/dev/null; do /usr/libexec/hearth/mantel-shell; sleep 1; done ) &
