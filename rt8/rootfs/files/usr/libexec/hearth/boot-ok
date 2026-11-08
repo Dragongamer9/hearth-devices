@@ -1,0 +1,10 @@
+#!/bin/sh
+# Hearth (RT8): this rootfs started. Clear the boot-try counter that
+# hearth-boot-fallback (in the boot ramdisk) keeps, and undo its rename if
+# this was the second try. See rt8/ramdisk-overlay/scripts/local-bottom.
+D=/userdata
+rm -f "$D/.hearth-boot-tries"
+if [ -f "$D/rootfs.img.failed" ] && [ ! -e "$D/rootfs.img" ]; then
+	mv "$D/rootfs.img.failed" "$D/rootfs.img"
+fi
+sync

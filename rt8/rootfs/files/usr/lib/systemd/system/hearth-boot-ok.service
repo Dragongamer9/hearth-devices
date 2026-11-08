@@ -1,0 +1,14 @@
+[Unit]
+Description=Hearth: mark this start as successful (boot fallback)
+# Counts as started once the graphical session target is reached and has
+# stayed up for a minute.
+After=graphical.target
+Wants=graphical.target
+
+[Service]
+Type=oneshot
+ExecStartPre=/bin/sleep 60
+ExecStart=/usr/libexec/hearth/boot-ok
+
+[Install]
+WantedBy=graphical.target
