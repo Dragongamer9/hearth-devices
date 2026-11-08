@@ -1,0 +1,70 @@
+diff --git a/src/xdg.c b/src/xdg.c
+index 86ee06c..b9318c6 100644
+--- a/src/xdg.c
++++ b/src/xdg.c
+@@ -1,6 +1,7 @@
+ // SPDX-License-Identifier: GPL-2.0-only
+ 
+ #include <assert.h>
++#include <stdlib.h>
+ #include <wlr/types/wlr_fractional_scale_v1.h>
+ 
+ #include "common/macros.h"
+@@ -714,6 +715,49 @@ xdg_activation_handle_request(struct wl_listener *listener, void *data)
+  *   - wlr_surface->data = scene_tree
+  *     to help the popups find their parent nodes
+  */
++/*
++ * Hearth RT8: Droidian's wlroots has the 0.18 xdg-shell behaviour, where the
++ * compositor must answer a toplevel's initial commit with a configure.
++ * labwc 0.7.4 (written for 0.17) relies on wlroots doing it, so without this
++ * clients wait forever and their windows never appear.
++ */
++struct hearth_initial_configure {
++	struct wlr_xdg_surface *xdg_surface;
++	struct wl_listener commit;
++	struct wl_listener destroy;
++};
++
++static void
++hearth_initial_configure_commit(struct wl_listener *listener, void *data)
++{
++	struct hearth_initial_configure *hic =
++		wl_container_of(listener, hic, commit);
++	if (hic->xdg_surface->initial_commit) {
++		wlr_xdg_surface_schedule_configure(hic->xdg_surface);
++	}
++}
++
++static void
++hearth_initial_configure_destroy(struct wl_listener *listener, void *data)
++{
++	struct hearth_initial_configure *hic =
++		wl_container_of(listener, hic, destroy);
++	wl_list_remove(&hic->commit.link);
++	wl_list_remove(&hic->destroy.link);
++	free(hic);
++}
++
++static void
++hearth_initial_configure_attach(struct wlr_xdg_surface *xdg_surface)
++{
++	struct hearth_initial_configure *hic = znew(*hic);
++	hic->xdg_surface = xdg_surface;
++	hic->commit.notify = hearth_initial_configure_commit;
++	wl_signal_add(&xdg_surface->surface->events.commit, &hic->commit);
++	hic->destroy.notify = hearth_initial_configure_destroy;
++	wl_signal_add(&xdg_surface->events.destroy, &hic->destroy);
++}
++
+ static void
+ xdg_surface_new(struct wl_listener *listener, void *data)
+ {
+@@ -730,6 +774,7 @@ xdg_surface_new(struct wl_listener *listener, void *data)
+ 	}
+ 
+ 	wlr_xdg_surface_ping(xdg_surface);
++	hearth_initial_configure_attach(xdg_surface);
+ 
+ 	struct xdg_toplevel_view *xdg_toplevel_view = znew(*xdg_toplevel_view);
+ 	struct view *view = &xdg_toplevel_view->base;
