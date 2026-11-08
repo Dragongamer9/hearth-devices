@@ -10,5 +10,6 @@ if [ "$1" = --path ]; then echo "$shell"; exit 0; fi
 # Qt's threaded render loop stalls for good under libhybris EGL (picture
 # freezes after a minute or so); the basic loop renders on the GUI thread.
 export QSG_RENDER_LOOP=basic EGL_PLATFORM=wayland QT_QPA_PLATFORM=wayland XDG_CURRENT_DESKTOP=Hearth XDG_SESSION_DESKTOP=hearth
-unset WLR_BACKENDS WLR_HWC_SKIP_VERSION_CHECK DISPLAY
+# Droidian's profile hides Qt title bars (phone style); Mantel windows have them.
+unset QT_WAYLAND_DISABLE_WINDOWDECORATION WLR_BACKENDS WLR_HWC_SKIP_VERSION_CHECK DISPLAY
 exec /opt/quickshell/bin/quickshell -p "$shell"

@@ -14,6 +14,16 @@ if [ ! -x /opt/quickshell/bin/quickshell ] || [ -z "$(/usr/libexec/hearth/mantel
 	exec /usr/bin/phosh-session
 fi
 
+# Desktop windows instead of phone ones: phoc stops forcing every window to
+# full screen, and GTK title bars get minimize/maximize/close. Applied once
+# per user (marker file), so anything the user changes later is kept.
+mark="$HOME/.config/hearth/mantel-desktop-defaults"
+if [ ! -e "$mark" ] && command -v gsettings >/dev/null; then
+	gsettings set sm.puri.phoc auto-maximize false 2>/dev/null
+	gsettings set org.gnome.desktop.wm.preferences button-layout 'appmenu:minimize,maximize,close' 2>/dev/null
+	mkdir -p "${mark%/*}" && : > "$mark"
+fi
+
 INI=/usr/share/phosh/phoc.ini; [ -f /etc/phosh/phoc.ini ] && INI=/etc/phosh/phoc.ini
 set --; [ -f "$INI" ] && set -- -C "$INI"
 # No -S: phoc's shell mode keeps the screen black until phosh's private
