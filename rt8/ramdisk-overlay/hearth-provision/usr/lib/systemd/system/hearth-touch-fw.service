@@ -1,0 +1,12 @@
+[Unit]
+Description=Hearth: load the touchscreen firmware
+After=lxc-android-config.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+TimeoutStartSec=120
+ExecStart=/bin/sh /usr/libexec/hearth/touch-fw
+
+[Install]
+WantedBy=multi-user.target

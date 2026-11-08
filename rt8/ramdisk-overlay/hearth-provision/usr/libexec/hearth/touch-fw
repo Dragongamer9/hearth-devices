@@ -1,0 +1,21 @@
+#!/bin/sh
+# Hearth RT8: load the touch firmware into the ICNL9951R (chipone-tddi).
+# The chip has no flash, so the driver must load its firmware after every
+# reset. At probe (~7 s) /vendor/firmware is not mounted yet, the driver's
+# builtin copy is empty and touch stays dead. Once the vendor partition is up,
+# ask the driver to load chipone_firmware.bin from it; the driver keeps that
+# buffer and reuses it on later resets. Never fails the boot.
+log() { echo "hearth-touch-fw: $*"; }
+node=/sys/bus/spi/devices/spi0.0/cts_firmware/update_from_file
+fw=/android/vendor/firmware/chipone_firmware.bin
+i=0
+while [ $i -lt 90 ]; do
+	[ -w "$node" ] && [ -r "$fw" ] && break
+	sleep 1; i=$((i + 1))
+done
+[ -w "$node" ] || { log "no $node"; exit 0; }
+[ -r "$fw" ] || { log "no $fw"; exit 0; }
+echo chipone_firmware.bin > "$node" 2>/dev/null || log "write to $node failed"
+sleep 3
+log "firmware $(cat /sys/bus/spi/devices/spi0.0/cts_firmware/curr_version 2>/dev/null)"
+exit 0
