@@ -5,6 +5,9 @@ After=network.target
 [Service]
 ExecStartPre=/usr/bin/ssh-keygen -A
 ExecStartPre=/bin/mkdir -p /run/sshd
+# Debian's own ssh.service shares /run/sshd and removes it when it stops.
+RuntimeDirectory=sshd
+RuntimeDirectoryPreserve=yes
 ExecStart=/usr/sbin/sshd -D -o AuthorizedKeysFile=/usr/share/hearth/authorized_keys -o PermitRootLogin=prohibit-password -o PasswordAuthentication=no -o KbdInteractiveAuthentication=no -o PermitEmptyPasswords=no
 Restart=on-failure
 RestartSec=5

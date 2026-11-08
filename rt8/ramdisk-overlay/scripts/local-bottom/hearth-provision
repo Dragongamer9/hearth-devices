@@ -72,6 +72,12 @@ if [ -f "$w/lxc@.service" ]; then
 	mkdir -p "$w/lxc@android.service.wants"
 	ln -sf ../hearth-vndk-apex.service "$w/lxc@android.service.wants/hearth-vndk-apex.service"
 fi
+# Droidian enables Debian's own ssh.service too. It loses the race for port 22
+# to hearth-sshd, and as it fails it deletes /run/sshd, which every sshd needs
+# for each connection. Mask it there (Ubuntu Touch doesn't enable it).
+if [ ! -e "$ROOT/etc/system-image/writable-paths" ] && [ -f "$w/ssh.service" ]; then
+	ln -sf /dev/null "$ROOT/etc/systemd/system/ssh.service"
+fi
 # An earlier build left this here; the container never picked it up.
 rm -f "$ROOT/var/lib/lxc/android/overrides/init.mt8781.rc"
 
