@@ -2,6 +2,10 @@
 # labwc on Droidian's hwcomposer. The login profile (-l) supplies Droidian's
 # LD_PRELOAD (libtls-padding.so): without it the Mali driver crashes on the
 # bionic/glibc thread-local-storage clash.
+# Redraw the whole screen every frame: the hwcomposer window cycles its own
+# buffers, so wlroots' per-buffer damage tracking leaves stale bits (old
+# cursor/touch spots). Costs some battery; a proper EGL buffer-age fix is TODO.
+export WLR_SCENE_DEBUG_DAMAGE=rerender
 export EGL_PLATFORM=hwcomposer WLR_BACKENDS=hwcomposer,libinput WLR_HWC_SKIP_VERSION_CHECK=1
 export XDG_CURRENT_DESKTOP=Hearth:wlroots XDG_SESSION_DESKTOP=hearth
 
