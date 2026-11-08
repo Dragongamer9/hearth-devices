@@ -24,6 +24,10 @@ Tested with the Ubuntu Touch 24.04 image on slot B, flashed with mtkclient.
   - the clock must be right: with the RTC on an old date, PAM refuses the autologin
     ("password changed in future").
 
+- Wi-Fi (2026-11-08): wlan_drv_gen4m_6789 loads; hearth-wifi-on writes 1 to /dev/wmtWifi after
+  wmt_launcher is up, which creates wlan0 (plus ap0, wlan1, p2p0). NetworkManager is limited to
+  wlan0 (it picked ap0 and the association failed). Connects, gets an address, browses.
+
 ## Not working yet
 ### Battery reading at boot
 - The bootloader showed its low-battery screen with the battery at 47%; a second power-on
@@ -34,9 +38,6 @@ Tested with the Ubuntu Touch 24.04 image on slot B, flashed with mtkclient.
 - mediametrics/mediaserver32 need libstatspull.so.
 - Pen device ignored by libinput (no resolution).
 - Composer warns about plane alpha / pixel blend mode properties (-22).
-
-### Wi-Fi
-- wmt_loader/wmt_launcher start, but no wlan0 yet. Not investigated.
 
 ### Charging while powered off
 - Overnight on the charger, the battery ran flat instead of filling. While off and plugged in, the
