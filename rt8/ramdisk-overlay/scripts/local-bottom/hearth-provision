@@ -53,6 +53,7 @@ chmod 755 "$ROOT/usr/share/hearth"
 put usr/share/hearth/authorized_keys
 put usr/lib/systemd/system/hearth-sshd.service
 put usr/share/hearth/android/vold.rc
+put usr/share/hearth/android/vndservicemanager.rc
 put usr/share/hearth/android/init.boringssl.zygote64_32.rc
 put usr/lib/systemd/system/lxc-android-config-mount-apexes.service.d/hearth-all-apexes.conf
 put usr/lib/systemd/system/hearth-vndk-apex.service
@@ -75,6 +76,7 @@ if [ -f "$cfg" ]; then
 	grep -q '^# hearth-begin$' "$cfg" || cat >> "$cfg" <<'LXC'
 # hearth-begin
 lxc.mount.entry = /usr/share/hearth/android/vold.rc system/etc/init/vold.rc none bind,ro,optional 0 0
+lxc.mount.entry = /usr/share/hearth/android/vndservicemanager.rc vendor/etc/init/vndservicemanager.rc none bind,ro,optional 0 0
 lxc.mount.entry = /usr/share/hearth/android/init.boringssl.zygote64_32.rc system/etc/init/hw/init.boringssl.zygote64_32.rc none bind,ro,optional 0 0
 lxc.mount.entry = /usr/lib/hearth-modules vendor_dlkm/lib/modules none bind,ro,optional 0 0
 lxc.mount.entry = /run/hearth/apexd.rc system/etc/init/apexd.rc none bind,ro,optional 0 0

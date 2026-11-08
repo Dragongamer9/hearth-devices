@@ -1,0 +1,13 @@
+# Hearth RT8: the vendor's vndservicemanager.rc, with the service disabled and
+# without its onrestart lines. Without SELinux, vndservicemanager aborts in
+# android::Access::Access() a moment after it starts, and every restart ran
+# "class_restart main/hal/early_hal". That killed the graphics allocator and the
+# composer every few seconds, so the Lomiri session kept dropping back to the
+# boot spinner.
+service vndservicemanager /vendor/bin/vndservicemanager /dev/vndbinder
+    class core
+    user system
+    group system readproc
+    writepid /dev/cpuset/system-background/tasks
+    shutdown critical
+    disabled
