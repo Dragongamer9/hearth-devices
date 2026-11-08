@@ -137,7 +137,9 @@ if [ ! -e "$ROOT/etc/system-image/writable-paths" ] && [ -d "$NMSRC" ] && [ -d "
 	mkdir -p "$NMDST"
 	for f in "$NMSRC"/*; do
 		[ -f "$f" ] || continue
-		cat "$f" > "$NMDST/$(basename "$f")"
+		# Ubuntu Touch's netplan pins these to its own interface name (ap0);
+		# drop that so NetworkManager uses them on whatever interface exists.
+		grep -v '^interface-name=' "$f" > "$NMDST/$(basename "$f")"
 		chown 0:0 "$NMDST/$(basename "$f")"
 		chmod 600 "$NMDST/$(basename "$f")"
 	done
