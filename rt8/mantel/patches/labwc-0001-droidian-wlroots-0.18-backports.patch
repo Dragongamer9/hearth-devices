@@ -1,0 +1,26 @@
+diff --git a/src/output.c b/src/output.c
+index 1bf01429..38de88de 100644
+--- a/src/output.c
++++ b/src/output.c
+@@ -431,7 +431,7 @@ output_init(struct server *server)
+ 	 * Create an output layout, which is a wlroots utility for working with
+ 	 * an arrangement of screens in a physical layout.
+ 	 */
+-	server->output_layout = wlr_output_layout_create();
++	server->output_layout = wlr_output_layout_create(server->wl_display);
+ 	if (!server->output_layout) {
+ 		wlr_log(WLR_ERROR, "unable to create output layout");
+ 		exit(EXIT_FAILURE);
+diff --git a/src/tearing.c b/src/tearing.c
+index 45113de5..583fe1e2 100644
+--- a/src/tearing.c
++++ b/src/tearing.c
+@@ -15,7 +15,7 @@ set_tearing_hint(struct wl_listener *listener, void *data)
+ {
+ 	struct tearing_controller *controller = wl_container_of(listener, controller, set_hint);
+ 	struct view *view = view_from_wlr_surface(controller->tearing_control->surface);
+-	if (view && controller->tearing_control->hint) {
++	if (view && controller->tearing_control->current) {
+ 		view->tearing_hint = true;
+ 	}
+ }

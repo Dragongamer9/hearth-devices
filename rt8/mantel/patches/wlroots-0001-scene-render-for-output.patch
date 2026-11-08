@@ -1,0 +1,30 @@
+diff --git a/types/output/render.c b/types/output/render.c
+index b4e06fb..d9f6883 100644
+--- a/types/output/render.c
++++ b/types/output/render.c
+@@ -103,7 +103,7 @@ static struct wlr_buffer *output_acquire_empty_buffer(struct wlr_output *output,
+ 	}
+ 
+ 	struct wlr_render_pass *pass =
+-		wlr_renderer_begin_buffer_pass(output->renderer, buffer, NULL);
++		wlr_renderer_begin_buffer_pass_for_output(output->renderer, buffer, NULL, output);
+ 	if (pass == NULL) {
+ 		wlr_buffer_unlock(buffer);
+ 		return NULL;
+diff --git a/types/scene/wlr_scene.c b/types/scene/wlr_scene.c
+index dd86b3a..8b0461b 100644
+--- a/types/scene/wlr_scene.c
++++ b/types/scene/wlr_scene.c
+@@ -1797,10 +1797,10 @@ bool wlr_scene_output_build_state(struct wlr_scene_output *scene_output,
+ 		timer->pre_render_duration = timespec_to_nsec(&duration);
+ 	}
+ 
+-	struct wlr_render_pass *render_pass = wlr_renderer_begin_buffer_pass(output->renderer, buffer,
++	struct wlr_render_pass *render_pass = wlr_renderer_begin_buffer_pass_for_output(output->renderer, buffer,
+ 			&(struct wlr_buffer_pass_options){
+ 		.timer = timer ? timer->render_timer : NULL,
+-	});
++	}, output);
+ 	if (render_pass == NULL) {
+ 		wlr_buffer_unlock(buffer);
+ 		return false;
