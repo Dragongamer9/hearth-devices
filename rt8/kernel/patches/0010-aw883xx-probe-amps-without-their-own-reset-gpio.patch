@@ -1,0 +1,27 @@
+diff --git a/sound/soc/codecs/aw883xx/aw883xx.c b/sound/soc/codecs/aw883xx/aw883xx.c
+--- a/sound/soc/codecs/aw883xx/aw883xx.c
++++ b/sound/soc/codecs/aw883xx/aw883xx.c
+@@ -1593,8 +1593,11 @@
+ 
+ 	aw883xx->reset_gpio = of_get_named_gpio(np, "reset-gpio", 0);
+ 	if (aw883xx->reset_gpio < 0) {
+-		aw_dev_dbg(aw883xx->dev, "no reset gpio provided, will not hw reset");
+-		return -EIO;
++		/*
++		 * Oukitel RT8: the four amps share one reset line, listed only on
++		 * the first amp. The others probe without a hw reset.
++		 */
++		aw_dev_info(aw883xx->dev, "no reset gpio provided, will not hw reset");
+ 	} else {
+ 		aw_dev_info(aw883xx->dev, "reset gpio provided ok");
+ 	}
+@@ -2440,6 +2443,9 @@
+ 	ret = aw883xx_read_chipid(aw883xx);
+ 	if (ret < 0) {
+ 		aw_dev_dbg(&i2c->dev, "aw883xx_read_chipid failed ret=%d", ret);
++		/* Shared reset may still be held until the first amp probes. */
++		if (!gpio_is_valid(aw883xx->reset_gpio))
++			return -EPROBE_DEFER;
+ 		return ret;
+ 	}
+ 
