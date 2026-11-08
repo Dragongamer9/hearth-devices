@@ -26,6 +26,7 @@ cd "$SRC"
 cd wlroots
 git checkout -q -f "$WLR_REV"
 git apply "$HERE/patches/wlroots-0001-scene-render-for-output.patch"
+git apply "$HERE/patches/wlroots-0002-android-one-egl-surface-per-output.patch"
 meson setup --wipe build --prefix="$PREFIX_WLR" -Dbackends=hwcomposer,drm,libinput \
 	-Drenderers=gles2,android -Dallocators=gbm -Dxwayland=disabled -Dexamples=false \
 	-Ddroidian-extensions=true -Dsession=enabled

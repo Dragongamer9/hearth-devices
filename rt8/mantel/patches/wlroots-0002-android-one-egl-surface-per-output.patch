@@ -1,0 +1,32 @@
+diff --git a/render/android/renderer.c b/render/android/renderer.c
+index aecc8645..9c2cca57 100644
+--- a/render/android/renderer.c
++++ b/render/android/renderer.c
+@@ -177,8 +177,25 @@ static struct wlr_android_buffer *get_or_create_buffer(struct wlr_android_render
+ 		wlr_log(WLR_ERROR, "No native window set");
+ 		buffer->egl_surface = EGL_NO_SURFACE;
+ 	} else {
+-		buffer->egl_surface = eglCreateWindowSurface(renderer->egl->display,
+-			renderer->egl->config, (EGLNativeWindowType)hwc_output->egl_window, NULL);
++		/*
++		 * Hearth: one EGL surface per output. Every swapchain buffer used to
++		 * get its own window surface on the same native window, and
++		 * swap_buffers then presented whichever came first in the list, not
++		 * the one just drawn into: stale and half-drawn frames on screen
++		 * (most visible with a rotated output).
++		 */
++		struct wlr_android_buffer *other;
++		buffer->egl_surface = EGL_NO_SURFACE;
++		wl_list_for_each(other, &renderer->buffers, link) {
++			if (other->output == output && other->egl_surface != EGL_NO_SURFACE) {
++				buffer->egl_surface = other->egl_surface;
++				break;
++			}
++		}
++		if (buffer->egl_surface == EGL_NO_SURFACE) {
++			buffer->egl_surface = eglCreateWindowSurface(renderer->egl->display,
++				renderer->egl->config, (EGLNativeWindowType)hwc_output->egl_window, NULL);
++		}
+ 		if (buffer->egl_surface == EGL_NO_SURFACE) {
+ 			wlr_log(WLR_ERROR, "Failed to recreate EGL surface");
+ 			return NULL;
