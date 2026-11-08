@@ -3,7 +3,8 @@
 # android::Access::Access() a moment after it starts, and every restart ran
 # "class_restart main/hal/early_hal". That killed the graphics allocator and the
 # composer every few seconds, so the Lomiri session kept dropping back to the
-# boot spinner.
+# boot spinner. Without the onrestart lines its crash restarts only itself.
+# ("disabled" does not keep it off: init.rc starts it by name on init.)
 service vndservicemanager /vendor/bin/vndservicemanager /dev/vndbinder
     class core
     user system
