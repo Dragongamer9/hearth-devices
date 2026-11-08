@@ -1,35 +1,137 @@
 #!/usr/bin/python3
 # Hearth RT8: the stock vendor was built against an older VNDK
-# (ro.vndk.version, 31 on the RT8) than the system image ships (v34). Mount
-# that VNDK APEX from the stock system_ext partition (read-only) at
-# /android/apex/com.android.vndk.v<N> before the container starts, or
-# linkerconfig aborts and nothing in the container can link.
+# (ro.vndk.version, 31 on the RT8) than the system image ships (v34).
+#
+# 1. Mount that VNDK APEX from the stock system_ext partition (read-only) at
+#    /android/apex/com.android.vndk.v<N>, for the container's normal view of /apex.
+# 2. Offer the stock VNDK APEXes to Android's own apexd as well, by building a
+#    read-only overlay of the system image's /system/apex plus the stock
+#    system_ext/apex at /run/hearth/system-apex (bound over system/apex in the
+#    container). apexd --bootstrap then activates the vendor's VNDK in the early
+#    (bootstrap) mount namespace too, so the bootstrap linkerconfig is generated
+#    correctly. Without it that config comes out empty and every service started
+#    early (display, Wi-Fi, GPS, media...) links against the wrong libraries.
+# 3. Write a copy of apexd.rc without "reboot_on_failure" for apexd-bootstrap,
+#    so a failure there can never put the tablet in a reboot loop; the container
+#    then simply carries on as it did before this change.
+# Every step is best effort: on any problem it logs and leaves things as they were.
 import os, re, subprocess, zipfile
 
-ver = None
-for f in ("/android/vendor/build.prop", "/android/vendor/default.prop"):
-    try:
-        m = re.search(r"^ro\.vndk\.version=(\S+)", open(f).read(), re.M)
-        if m:
-            ver = m.group(1)
-            break
-    except OSError:
-        pass
-print("vendor VNDK version:", ver)
-target = f"/android/apex/com.android.vndk.v{ver}"
-if not ver or os.path.ismount(target):
-    raise SystemExit(0)
+RUN = "/run/hearth"
+SRC = f"{RUN}/stock_system_ext"
 
-src = "/run/hearth/stock_system_ext"
-os.makedirs(src, exist_ok=True)
-if not os.path.ismount(src):
-    subprocess.run(["mount", "-o", "ro", "/dev/mapper/system_ext_a", src], check=True)
-apex = f"{src}/apex/com.android.vndk.v{ver}.apex"
-if not os.path.isfile(apex):
-    print("no", apex, "- leaving it")
-    raise SystemExit(0)
-with zipfile.ZipFile(apex) as zf, zf.open("apex_payload.img") as p:
-    off = p._orig_compress_start
-os.makedirs(target, exist_ok=True)
-subprocess.run(["mount", "-o", f"loop,offset={off},ro", apex, target], check=True)
-print("mounted", apex, "at", target)
+
+def log(*a):
+    print("vndk-apex:", *a, flush=True)
+
+
+def vndk_version():
+    for f in ("/android/vendor/build.prop", "/android/vendor/default.prop"):
+        try:
+            m = re.search(r"^ro\.vndk\.version=(\S+)", open(f).read(), re.M)
+            if m:
+                return m.group(1)
+        except OSError:
+            pass
+    return None
+
+
+def mount_stock_system_ext():
+    os.makedirs(SRC, exist_ok=True)
+    if not os.path.ismount(SRC):
+        subprocess.run(["mount", "-o", "ro", "/dev/mapper/system_ext_a", SRC], check=True)
+
+
+def mount_vndk_for_default_view(ver):
+    target = f"/android/apex/com.android.vndk.v{ver}"
+    if os.path.ismount(target):
+        return
+    apex = f"{SRC}/apex/com.android.vndk.v{ver}.apex"
+    if not os.path.isfile(apex):
+        log("no", apex)
+        return
+    with zipfile.ZipFile(apex) as zf, zf.open("apex_payload.img") as p:
+        off = p._orig_compress_start
+    os.makedirs(target, exist_ok=True)
+    subprocess.run(["mount", "-o", f"loop,offset={off},ro", apex, target], check=True)
+    log("mounted", apex, "at", target)
+
+
+def system_apex_dir():
+    for d in ("/var/lib/lxc/android/rootfs/system/apex", "/android/system/apex"):
+        if os.path.isdir(d) and os.listdir(d):
+            return d
+    return None
+
+
+def build_system_apex_overlay(ver):
+    out = f"{RUN}/system-apex"
+    if os.path.ismount(out):
+        return
+    if not os.path.isfile(f"{RUN}/apexd.rc"):
+        log("no reboot-safe apexd.rc; not offering the VNDK APEX to apexd")
+        return
+    sysapex = system_apex_dir()
+    extra = f"{SRC}/apex"
+    if not sysapex or not os.path.isfile(f"{extra}/com.android.vndk.v{ver}.apex"):
+        log("system/apex or the stock VNDK APEX not found; no overlay")
+        return
+    if os.path.isfile(f"{sysapex}/com.android.vndk.v{ver}.apex"):
+        log("system image already ships VNDK", ver, "; no overlay needed")
+        return
+    os.makedirs(out, exist_ok=True)
+    # The system image's own APEXes win on any name clash. If the mount fails the
+    # empty directory is removed again, so the container never binds it over
+    # system/apex (its mount entry is "optional").
+    try:
+        subprocess.run(["mount", "-t", "overlay", "overlay", "-o",
+                        f"ro,lowerdir={sysapex}:{extra}", out], check=True)
+    except Exception:
+        os.rmdir(out)
+        raise
+    log("overlay", sysapex, "+", extra, "at", out, ":", sorted(os.listdir(out)))
+
+
+def write_apexd_rc():
+    for src in ("/var/lib/lxc/android/rootfs/system/etc/init/apexd.rc",
+                "/android/system/etc/init/apexd.rc"):
+        if os.path.isfile(src):
+            break
+    else:
+        log("apexd.rc not found")
+        return
+    out, cur = [], None
+    for line in open(src).read().splitlines():
+        m = re.match(r"^service\s+(\S+)", line)
+        if m:
+            cur = m.group(1)
+        elif line and not line[0].isspace():
+            cur = None
+        if cur == "apexd-bootstrap" and line.strip().startswith("reboot_on_failure"):
+            out.append("    # reboot_on_failure removed by Hearth")
+            continue
+        out.append(line)
+    os.makedirs(RUN, exist_ok=True)
+    with open(f"{RUN}/apexd.rc", "w") as f:
+        f.write("\n".join(out) + "\n")
+    log("wrote", f"{RUN}/apexd.rc")
+
+
+def main():
+    ver = vndk_version()
+    log("vendor VNDK version:", ver)
+    if not ver:
+        return
+    for step in (mount_stock_system_ext,
+                 lambda: mount_vndk_for_default_view(ver),
+                 write_apexd_rc,
+                 lambda: build_system_apex_overlay(ver)):
+        try:
+            step()
+        except Exception as e:  # keep going; each part is optional
+            log("step failed:", e)
+            if step is mount_stock_system_ext:
+                return
+
+
+main()

@@ -76,6 +76,8 @@ if [ -f "$cfg" ]; then
 lxc.mount.entry = /usr/share/hearth/android/vold.rc system/etc/init/vold.rc none bind,ro,optional 0 0
 lxc.mount.entry = /usr/share/hearth/android/init.boringssl.zygote64_32.rc system/etc/init/hw/init.boringssl.zygote64_32.rc none bind,ro,optional 0 0
 lxc.mount.entry = /usr/lib/hearth-modules vendor_dlkm/lib/modules none bind,ro,optional 0 0
+lxc.mount.entry = /run/hearth/apexd.rc system/etc/init/apexd.rc none bind,ro,optional 0 0
+lxc.mount.entry = /run/hearth/system-apex system/apex none bind,ro,optional 0 0
 # hearth-end
 LXC
 	say "provision: Android init overrides added to the container config"
