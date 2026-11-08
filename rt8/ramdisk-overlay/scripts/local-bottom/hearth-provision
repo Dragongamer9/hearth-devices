@@ -70,6 +70,15 @@ put usr/lib/systemd/system/phosh.service.d/hearth-mantel.conf
 put usr/libexec/hearth/mantel-session
 put usr/libexec/hearth/mantel-shell
 put usr/libexec/hearth/mantel-labwc
+# The boot-OK check (hearth-boot-fallback clears its try counter through it). It lives in /usr/libexec/hearth,
+# which is emptied above at every boot, so it has to come from here too; only on the Hearth (Droidian) rootfs.
+if [ -e "$ROOT/usr/lib/systemd/system/phosh.service" ]; then
+	put usr/libexec/hearth/boot-ok
+	chmod 755 "$ROOT/usr/libexec/hearth/boot-ok"
+	put usr/lib/systemd/system/hearth-boot-ok.service
+	mkdir -p "$ROOT/usr/lib/systemd/system/graphical.target.wants"
+	ln -sf ../hearth-boot-ok.service "$ROOT/usr/lib/systemd/system/graphical.target.wants/hearth-boot-ok.service"
+fi
 chmod 755 "$ROOT/usr/libexec/hearth" "$ROOT/usr/libexec/hearth/vndk-apex" "$ROOT/usr/libexec/hearth/host-apex" "$ROOT/usr/libexec/hearth/wifi-on" "$ROOT/usr/libexec/hearth/touch-fw" "$ROOT/usr/libexec/hearth/mantel-session" "$ROOT/usr/libexec/hearth/mantel-shell" "$ROOT/usr/libexec/hearth/mantel-labwc"
 mkdir -p "$w/lxc-android-config.service.wants"
 ln -sf ../hearth-vndk-apex.service "$w/lxc-android-config.service.wants/hearth-vndk-apex.service"

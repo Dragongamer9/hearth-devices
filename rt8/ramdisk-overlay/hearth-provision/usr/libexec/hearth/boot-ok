@@ -1,0 +1,16 @@
+#!/bin/sh
+# Hearth (RT8): this rootfs started. Clear the boot-try counter that
+# hearth-boot-fallback (in the boot ramdisk) keeps, and undo its rename if
+# this was the second try. See rt8/ramdisk-overlay/scripts/local-bottom.
+D=/userdata
+# Only a start that reached a running shell counts: phosh today, labwc (Mantel)
+# later. Otherwise leave the counter, so the next start falls back.
+if ! systemctl is-active --quiet phosh.service && ! pgrep -x labwc >/dev/null; then
+	echo "boot-ok: no shell running; not marking this start as good"
+	exit 1
+fi
+rm -f "$D/.hearth-boot-tries"
+if [ -f "$D/rootfs.img.failed" ] && [ ! -e "$D/rootfs.img" ]; then
+	mv "$D/rootfs.img.failed" "$D/rootfs.img"
+fi
+sync
