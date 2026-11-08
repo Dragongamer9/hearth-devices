@@ -1,0 +1,12 @@
+#!/bin/bash -l
+# The login profile (-l) supplies Droidian's LD_PRELOAD (libtls-padding.so
+# and friends). Without it the Mali driver, loaded through libhybris,
+# crashes on the bionic/glibc thread-local-storage clash.
+shell=
+for d in /usr/share/hearth/shell /userdata/hearth-src/hearth-os/hosts/linux/desktop/shell; do
+	[ -f "$d/shell.qml" ] && { shell=$d; break; }
+done
+if [ "$1" = --path ]; then echo "$shell"; exit 0; fi
+export EGL_PLATFORM=wayland QT_QPA_PLATFORM=wayland XDG_CURRENT_DESKTOP=Hearth XDG_SESSION_DESKTOP=hearth
+unset WLR_BACKENDS WLR_HWC_SKIP_VERSION_CHECK DISPLAY
+exec /opt/quickshell/bin/quickshell -p "$shell"

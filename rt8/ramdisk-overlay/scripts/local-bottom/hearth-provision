@@ -66,7 +66,10 @@ put usr/libexec/hearth/wifi-on
 put usr/lib/NetworkManager/conf.d/hearth-wifi.conf
 put usr/lib/systemd/system/hearth-touch-fw.service
 put usr/libexec/hearth/touch-fw
-chmod 755 "$ROOT/usr/libexec/hearth" "$ROOT/usr/libexec/hearth/vndk-apex" "$ROOT/usr/libexec/hearth/host-apex" "$ROOT/usr/libexec/hearth/wifi-on" "$ROOT/usr/libexec/hearth/touch-fw"
+put usr/lib/systemd/system/phosh.service.d/hearth-mantel.conf
+put usr/libexec/hearth/mantel-session
+put usr/libexec/hearth/mantel-shell
+chmod 755 "$ROOT/usr/libexec/hearth" "$ROOT/usr/libexec/hearth/vndk-apex" "$ROOT/usr/libexec/hearth/host-apex" "$ROOT/usr/libexec/hearth/wifi-on" "$ROOT/usr/libexec/hearth/touch-fw" "$ROOT/usr/libexec/hearth/mantel-session" "$ROOT/usr/libexec/hearth/mantel-shell"
 mkdir -p "$w/lxc-android-config.service.wants"
 ln -sf ../hearth-vndk-apex.service "$w/lxc-android-config.service.wants/hearth-vndk-apex.service"
 # Droidian starts the container with lxc@android instead.
