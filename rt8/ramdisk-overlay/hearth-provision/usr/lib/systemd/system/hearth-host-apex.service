@@ -1,0 +1,14 @@
+[Unit]
+Description=Hearth: unpacked Android runtime libraries for libhybris (Droidian)
+# Droidian only (lxc-android-notify fills /apex once the container is up).
+ConditionPathExists=/usr/lib/lxc-android/lxc-android-notify
+After=lxc@android.service hearth-vndk-apex.service
+Before=phosh.service graphical.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/bin/python3 /usr/libexec/hearth/host-apex
+
+[Install]
+WantedBy=lxc@android.service

@@ -1,0 +1,33 @@
+#!/usr/bin/python3
+# Hearth RT8 (Droidian): give the host the unpacked Android runtime libraries.
+#
+# Droidian's libhybris (phoc/phosh, audio, sensors...) loads bionic and the
+# other APEX libraries from /apex/<name> on the host. Droidian's own system
+# images ship those APEXes flattened (as directories), so lxc-android-notify
+# just bind-mounts them there. Our Android 14 system image ships them as .apex
+# files, so the folders stay empty and phoc dies with 'library "libc.so" not
+# found'. Mount each APEX's payload image read-only at /apex/<name> instead,
+# plus the stock VNDK APEX the vendor needs. Best effort: never fails.
+import glob, os, subprocess, zipfile
+
+SOURCES = (glob.glob("/android/system/apex/*.apex")
+           + glob.glob("/run/hearth/stock_system_ext/apex/com.android.vndk.v*.apex"))
+
+
+def log(*a):
+    print("host-apex:", *a, flush=True)
+
+
+for apex in sorted(SOURCES):
+    name = os.path.basename(apex)[:-len(".apex")]
+    target = f"/apex/{name}"
+    try:
+        if os.path.ismount(target) or (os.path.isdir(target) and os.listdir(target)):
+            continue
+        with zipfile.ZipFile(apex) as zf, zf.open("apex_payload.img") as p:
+            offset = p._orig_compress_start
+        os.makedirs(target, exist_ok=True)
+        subprocess.run(["mount", "-o", f"loop,ro,offset={offset}", apex, target], check=True)
+        log("mounted", name)
+    except Exception as e:
+        log("skipped", name, ":", e)

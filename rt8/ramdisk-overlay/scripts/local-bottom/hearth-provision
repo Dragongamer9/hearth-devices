@@ -58,19 +58,22 @@ put usr/share/hearth/android/init.boringssl.zygote64_32.rc
 put usr/lib/systemd/system/lxc-android-config-mount-apexes.service.d/hearth-all-apexes.conf
 put usr/lib/systemd/system/hearth-vndk-apex.service
 put usr/libexec/hearth/vndk-apex
+put usr/lib/systemd/system/hearth-host-apex.service
+put usr/libexec/hearth/host-apex
 put usr/lib/systemd/system/lightdm.service.d/hearth-composer-only.conf
 put usr/lib/systemd/system/hearth-wifi-on.service
 put usr/libexec/hearth/wifi-on
 put usr/lib/NetworkManager/conf.d/hearth-wifi.conf
 put usr/lib/systemd/system/hearth-touch-fw.service
 put usr/libexec/hearth/touch-fw
-chmod 755 "$ROOT/usr/libexec/hearth" "$ROOT/usr/libexec/hearth/vndk-apex" "$ROOT/usr/libexec/hearth/wifi-on" "$ROOT/usr/libexec/hearth/touch-fw"
+chmod 755 "$ROOT/usr/libexec/hearth" "$ROOT/usr/libexec/hearth/vndk-apex" "$ROOT/usr/libexec/hearth/host-apex" "$ROOT/usr/libexec/hearth/wifi-on" "$ROOT/usr/libexec/hearth/touch-fw"
 mkdir -p "$w/lxc-android-config.service.wants"
 ln -sf ../hearth-vndk-apex.service "$w/lxc-android-config.service.wants/hearth-vndk-apex.service"
 # Droidian starts the container with lxc@android instead.
 if [ -f "$w/lxc@.service" ]; then
 	mkdir -p "$w/lxc@android.service.wants"
 	ln -sf ../hearth-vndk-apex.service "$w/lxc@android.service.wants/hearth-vndk-apex.service"
+	ln -sf ../hearth-host-apex.service "$w/lxc@android.service.wants/hearth-host-apex.service"
 fi
 # Droidian enables Debian's own ssh.service too. It loses the race for port 22
 # to hearth-sshd, and as it fails it deletes /run/sshd, which every sshd needs
