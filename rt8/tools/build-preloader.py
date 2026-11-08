@@ -27,11 +27,22 @@ fields = [(o, struct.unpack_from('<I', region, o)[0]) for o in range(0, 0x40, 4)
 starts = [o for o, v in fields if v == start]
 ends = [o for o, v in fields if v in (start + oldlen, start + oldlen - 1)]
 lens = [o for o, v in fields if v == oldlen]
-print('start field at', [hex(o) for o in starts], '| end field at', [hex(o) for o in ends], '| length field at', [hex(o) for o in lens])
+# Some layouts give the preloader a fixed area: the end fields mark the area, not the image.
+areas = sorted({v for o, v in fields if start + oldlen < v <= len(dump)})
+print('start field at', [hex(o) for o in starts], '| end field at', [hex(o) for o in ends],
+      '| length field at', [hex(o) for o in lens], '| fixed area ends', [hex(v) for v in areas])
 if newlen > len(pkg) or newlen < 0x10000: fail('package length field looks wrong')
+if not starts: fail('BRLYT has no field pointing at the image')
+out = bytearray(dump)
+if not ends and not lens and len(areas) == 1:
+    area_end = areas[0]
+    if start + newlen > area_end: fail('new image is larger than the fixed area')
+    out[start:area_end] = pkg[:newlen] + b'\0' * (area_end - start - newlen)
+    open(sys.argv[3], 'wb').write(out)
+    print('OK: wrote %s (%d bytes); fixed area 0x%x-0x%x, BRLYT unchanged' % (sys.argv[3], len(out), start, area_end))
+    sys.exit(0)
+if len(ends) + len(lens) != 1: fail('BRLYT layout not recognised')
 if start + newlen > len(dump): fail('new image does not fit')
-if len(starts) != 1 or len(ends) + len(lens) != 1:
-    fail('BRLYT layout not recognised')
 out = bytearray(dump[:start]) + pkg[:newlen]
 out += b'\0' * (len(dump) - len(out))
 if ends:
