@@ -9,6 +9,7 @@
 # The Android side stays our own Halium 14 image (/data/android-rootfs.img),
 # and the boot ramdisk installs the RT8 fixes (hearth-provision) at boot.
 set -euo pipefail
+set -x
 ZIP=$(realpath "$1")
 OUT=$(realpath -m "$2")
 HERE=$(cd "$(dirname "$0")" && pwd)
@@ -56,8 +57,12 @@ export DEBIAN_FRONTEND=noninteractive
 apt-get update
 dpkg -s openssh-server >/dev/null 2>&1 || apt-get install -y --no-install-recommends openssh-server
 apt-get clean
-[ -f /etc/resolv.conf.orig ] && mv /etc/resolv.conf.orig /etc/resolv.conf
+if [ -f /etc/resolv.conf.orig ]; then mv /etc/resolv.conf.orig /etc/resolv.conf; fi
 rm -f /etc/resolv.conf.hearth
+# Host keys made here would be the same on every tablet; sshd-keygen makes
+# new ones on the first boot.
+rm -f /etc/ssh/ssh_host_*
+exit 0
 CHROOT
 touch "$MNT/.writable_image"
 echo "Hearth OS RT8 rootfs, milestone 1 (Droidian base)" > "$MNT/etc/hearth-rt8-rootfs"
@@ -67,6 +72,8 @@ mkdir -p "$MNT/usr/lib/systemd/system/graphical.target.wants"
 ln -sf ../hearth-boot-ok.service "$MNT/usr/lib/systemd/system/graphical.target.wants/hearth-boot-ok.service"
 
 # 4. Report: what Droidian gives us for display, sound and the Android side.
+# Best effort: a missing package or file must not fail the build.
+set +e +o pipefail
 {
 	echo "== os-release"; cat "$MNT/etc/os-release"
 	echo "== packages"
@@ -79,6 +86,7 @@ ln -sf ../hearth-boot-ok.service "$MNT/usr/lib/systemd/system/graphical.target.w
 	echo "== lxc config"; head -40 "$MNT/var/lib/lxc/android/config" 2>/dev/null || echo "(none)"
 	echo "== size"; df -h "$MNT" | tail -1
 } > "$OUT/report.txt" 2>&1
+set -e -o pipefail
 
 sync
 for m in dev/pts dev proc sys run; do umount "$MNT/$m"; done
