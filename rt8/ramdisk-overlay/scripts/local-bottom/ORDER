@@ -1,3 +1,5 @@
+/scripts/local-bottom/hearth-boot-fallback "$@"
+[ -e /conf/param.conf ] && . /conf/param.conf
 /scripts/local-bottom/hearth-vendor-links "$@"
 [ -e /conf/param.conf ] && . /conf/param.conf
 /scripts/local-bottom/hearth-provision "$@"

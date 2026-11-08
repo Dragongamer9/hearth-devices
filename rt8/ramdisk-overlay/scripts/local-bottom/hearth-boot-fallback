@@ -1,0 +1,40 @@
+#!/bin/sh
+# Hearth (RT8): automatic fallback from the Hearth rootfs to Ubuntu Touch.
+#
+# Halium boots /data/rootfs.img when it exists and /data/ubuntu.img otherwise.
+# Every boot of rootfs.img adds one to /data/.hearth-boot-tries. On the second
+# try in a row, rootfs.img is renamed to rootfs.img.failed before it starts,
+# so if this start doesn't finish either, the next boot is Ubuntu Touch.
+# Once the Hearth rootfs has fully started, hearth-boot-ok clears the counter
+# and renames rootfs.img.failed back. ubuntu.img is never touched.
+# To try Hearth again after a fallback, rename rootfs.img.failed to rootfs.img.
+#
+# Runs in local-bottom: userdata is only found after the UFS module loads,
+# and the image for this boot is already chosen and mounted. Renaming the
+# mounted image is safe (same inode, same filesystem). Never fails the boot.
+PREREQ=""
+prereqs() { echo "$PREREQ"; }
+case "$1" in prereqs) prereqs; exit 0;; esac
+
+say() { echo "hearth: fallback: $*" > /dev/kmsg; }
+DATA=${rootmnt:-/root}/userdata
+TRIES="$DATA/.hearth-boot-tries"
+
+[ -f "$DATA/rootfs.img" ] || exit 0
+
+tries=$(cat "$TRIES" 2>/dev/null)
+case "$tries" in ''|*[!0-9]*) tries=0;; esac
+tries=$((tries + 1))
+echo "$tries" > "$TRIES"
+
+if [ "$tries" -ge 2 ]; then
+	if mv "$DATA/rootfs.img" "$DATA/rootfs.img.failed"; then
+		say "rootfs.img try $tries; if it doesn't finish starting, the next boot uses ubuntu.img"
+	else
+		say "rootfs.img try $tries; could not rename it"
+	fi
+else
+	say "booting rootfs.img (try $tries)"
+fi
+sync
+exit 0

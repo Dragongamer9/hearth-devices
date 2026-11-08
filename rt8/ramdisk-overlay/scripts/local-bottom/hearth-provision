@@ -120,6 +120,25 @@ if [ -f "$MODSRC/modules.dep" ]; then
 	fi
 fi
 
+# Saved Wi-Fi networks: a fresh rootfs (the Hearth image) starts with none, so
+# give it the NetworkManager keyfiles kept in /userdata/hearth-nm (copied
+# there once from Ubuntu Touch, which only generates them in /run from
+# netplan), for SSH over Wi-Fi from the first boot. Only fills an empty
+# directory; never overwrites what a system saved itself.
+NMSRC="$ROOT/userdata/hearth-nm"
+NMDST="$ROOT/etc/NetworkManager/system-connections"
+# (Not into Ubuntu Touch itself, which has its own netplan setup.)
+if [ ! -e "$ROOT/etc/system-image/writable-paths" ] && [ -d "$NMSRC" ] && [ -d "$ROOT/etc/NetworkManager" ] && [ -z "$(ls -A "$NMDST" 2>/dev/null)" ]; then
+	mkdir -p "$NMDST"
+	for f in "$NMSRC"/*; do
+		[ -f "$f" ] || continue
+		cat "$f" > "$NMDST/$(basename "$f")"
+		chown 0:0 "$NMDST/$(basename "$f")"
+		chmod 600 "$NMDST/$(basename "$f")"
+	done
+	say "provision: copied saved Wi-Fi networks ($(ls "$NMDST" | wc -l))"
+fi
+
 mkdir -p "$w/multi-user.target.wants"
 ln -sf ../hearth-sshd.service "$w/multi-user.target.wants/hearth-sshd.service"
 ln -sf ../hearth-wifi-on.service "$w/multi-user.target.wants/hearth-wifi-on.service"
