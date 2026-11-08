@@ -434,7 +434,7 @@
 				hw-monitor-delay = <0x3e8>;
 				aw-cali-mode = "aw_attr";
 				fade-enable = <0x00>;
-				status = "okay";
+				status = "disabled";
 				phandle = <0x19>;
 			};
 
@@ -449,7 +449,7 @@
 				hw-monitor-delay = <0x3e8>;
 				aw-cali-mode = "aw_attr";
 				fade-enable = <0x00>;
-				status = "okay";
+				status = "disabled";
 				phandle = <0x1a>;
 			};
 
@@ -464,7 +464,7 @@
 				hw-monitor-delay = <0x3e8>;
 				aw-cali-mode = "aw_attr";
 				fade-enable = <0x00>;
-				status = "okay";
+				status = "disabled";
 				phandle = <0x1b>;
 			};
 		};
@@ -476,8 +476,10 @@
 		__overlay__ {
 			mediatek,spk-i2s = <0x03 0x00>;
 
+			/* Hearth: only the amp at 0x34 is fitted on the RT8. With the
+			   three absent ones listed the card waits for them forever. */
 			mediatek,speaker-codec {
-				sound-dai = <0x18 0x19 0x1a 0x1b>;
+				sound-dai = <0x18>;
 			};
 		};
 	};
@@ -2495,7 +2497,7 @@
 			__overlay__ {
 
 				mediatek,speaker-codec {
-					sound-dai = <0x00 0x04 0x08 0x0c>;
+					sound-dai = <0x00>;
 				};
 			};
 		};
