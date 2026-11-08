@@ -22,6 +22,12 @@ TRIES="$DATA/.hearth-boot-tries"
 
 [ -f "$DATA/rootfs.img" ] || exit 0
 
+# Rescue build (branch rt8-rescue): always move the Hearth rootfs aside, so
+# the next boot is Ubuntu Touch. Not for main.
+mv "$DATA/rootfs.img" "$DATA/rootfs.img.failed" && rm -f "$TRIES" && say "rescue: rootfs.img moved aside, next boot uses ubuntu.img"
+sync
+exit 0
+
 tries=$(cat "$TRIES" 2>/dev/null)
 case "$tries" in ''|*[!0-9]*) tries=0;; esac
 tries=$((tries + 1))
