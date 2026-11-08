@@ -36,6 +36,7 @@ cd "$SRC"
 cd labwc
 git checkout -q -f 0.7.4
 git apply "$HERE/patches/labwc-0001-droidian-wlroots-0.18-backports.patch"
+git apply "$HERE/patches/labwc-0002-hearth-initial-output-transform.patch"
 PKG_CONFIG_PATH="$PREFIX_WLR/lib/aarch64-linux-gnu/pkgconfig:$PREFIX_WLR/lib/pkgconfig" \
 	meson setup --wipe build --prefix="$PREFIX_LABWC" -Dxwayland=disabled -Dman-pages=disabled \
 	-Dc_link_args="-Wl,-rpath,$PREFIX_WLR/lib/aarch64-linux-gnu:$PREFIX_WLR/lib"

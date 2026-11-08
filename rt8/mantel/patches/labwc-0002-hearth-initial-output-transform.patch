@@ -1,0 +1,41 @@
+diff --git a/src/output.c b/src/output.c
+index 38de88d..287eea5 100644
+--- a/src/output.c
++++ b/src/output.c
+@@ -8,6 +8,7 @@
+ 
+ #define _POSIX_C_SOURCE 200809L
+ #include <assert.h>
++#include <stdlib.h>
+ #include <strings.h>
+ #include <wlr/backend/drm.h>
+ #include <wlr/backend/wayland.h>
+@@ -339,6 +340,28 @@ new_output_notify(struct wl_listener *listener, void *data)
+ 		output_enable_adaptive_sync(wlr_output, true);
+ 	}
+ 
++	/*
++	 * Hearth RT8: rotation and scale must be in the output's very first
++	 * commit. On Droidian's hwcomposer backend a later change (e.g. through
++	 * wlr-randr) leaves part of the screen in the old orientation.
++	 */
++	const char *hearth_tf = getenv("HEARTH_OUTPUT_TRANSFORM");
++	if (hearth_tf && *hearth_tf) {
++		int deg = atoi(hearth_tf);
++		enum wl_output_transform tf = deg == 90 ? WL_OUTPUT_TRANSFORM_90
++			: deg == 180 ? WL_OUTPUT_TRANSFORM_180
++			: deg == 270 ? WL_OUTPUT_TRANSFORM_270
++			: WL_OUTPUT_TRANSFORM_NORMAL;
++		wlr_output_set_transform(wlr_output, tf);
++	}
++	const char *hearth_scale = getenv("HEARTH_OUTPUT_SCALE");
++	if (hearth_scale && *hearth_scale) {
++		float sc = strtof(hearth_scale, NULL);
++		if (sc > 0.1f && sc < 10.0f) {
++			wlr_output_set_scale(wlr_output, sc);
++		}
++	}
++
+ 	wlr_output_commit(wlr_output);
+ 
+ 	output = znew(*output);
