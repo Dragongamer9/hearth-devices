@@ -28,6 +28,12 @@ Tested with the Ubuntu Touch 24.04 image on slot B, flashed with mtkclient.
   wmt_launcher is up, which creates wlan0 (plus ap0, wlan1, p2p0). NetworkManager is limited to
   wlan0 (it picked ap0 and the association failed). Connects, gets an address, browses.
 
+- Touch firmware (2026-11-08): the ICNL9951R (chipone-tddi, spi0.0) has no flash. At probe the
+  driver's builtin firmware is empty and /vendor/firmware isn't mounted, so touch only worked
+  while the bootloader's copy survived. hearth-touch-fw writes chipone_firmware.bin to
+  cts_firmware/update_from_file once the vendor partition is up. Never unbind the driver: that
+  crashes the kernel.
+
 ## Not working yet
 ### Battery reading at boot
 - The bootloader showed its low-battery screen with the battery at 47%; a second power-on
