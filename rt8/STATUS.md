@@ -8,26 +8,32 @@ Tested with the Ubuntu Touch 24.04 image on slot B, flashed with mtkclient.
 - The Android container stays RUNNING with about 60 vendor services. This needed the rc overrides
   (vold, 64-bit-only boringssl self tests), all APEXes mounted and VNDK v31 from stock system_ext_a.
 - Touch: chipone-tddi over SPI (patches 0008/0009) gives the chipone-tddi and chipone-tddi,pen devices.
-- GPU: /dev/mali0 (fhctl + gpufreq + mali_kbase_mt6789).
+- GPU: /dev/mali0 (fhctl + gpufreq + mali_kbase_mt6789); Mali-G57 MC2, GLES 3.2 r32p1.
 - Modem ccmni interfaces; 206 kernel modules copied for the container.
+- Display and the Ubuntu Touch UI (2026-11-08): Lomiri runs on the 1200x1920 panel, touch works
+  and the first-run wizard completes. What it took:
+  - apexd-bootstrap activates the vendor's VNDK v31 APEX (vndk-apex: overlay of stock
+    system_ext/apex onto system/apex, apexd.rc without reboot_on_failure), so services started
+    early get a full linkerconfig;
+  - lightdm.service drop-in hides hwcomposer.mtk_common.so from the compositor, so it uses the
+    HIDL composer instead of loading the HAL in-process and holding DRM master;
+  - vndservicemanager disabled through an rc override: without SELinux it aborts in
+    Access::Access(), and its onrestart lines restarted main/hal/early_hal (allocator and
+    composer) every few seconds, which dropped the session;
+  - userdata needs the ext4 `encrypt` feature (`tune2fs -O encrypt`) for fscrypt status;
+  - the clock must be right: with the RTC on an old date, PAM refuses the autologin
+    ("password changed in future").
 
 ## Not working yet
-### Display (black screen)
-- vendor.hwcomposer-2-3 loads /vendor/lib64/hw/hwcomposer.mtk_common.so, which fails with
-  `library "libandroidicu.so" not found: needed by /system/lib64/libxml2.so in namespace (default)`.
-  It then falls back to gralloc/HWC2OnFbAdapter, which lacks function 54, and exits.
-- Checked and fine:
-  - the container /linkerconfig (1880 lines) has a correct [vendor] section, with vndk search on
-    /apex/com.android.vndk.v31/${LIB};
-  - /apex/com.android.vndk.v31/lib64 inside the container has 134 files, including libxml2.so;
-  - the service runs from /vendor/bin/hw and matches dir.vendor;
-  - vendor services and lxc-attach share one mount namespace;
-  - there are no LD_* variables.
-- Next checks:
-  - whether libxml2.so is in the container's [vendor] `namespace.default.link.vndk.shared_libs`;
-  - linker debug with `setprop debug.ld.all dlerror,dlopen` and logcat tag `linker`.
-- While hwcomposer is broken, lomiri-system-compositor opens /dev/dri/card0 itself and holds DRM
-  master. That should go away once hwcomposer works.
+### Battery reading at boot
+- The bootloader showed its low-battery screen with the battery at 47%; a second power-on
+  booted normally. MTK_FG_NVRAM (fuel gauge calibration) fails to open in the container.
+
+### Smaller issues
+- pulseaudio aborts: libsndcardparser.so missing, 32-bit awinic.audio.effect.so.
+- mediametrics/mediaserver32 need libstatspull.so.
+- Pen device ignored by libinput (no resolution).
+- Composer warns about plane alpha / pixel blend mode properties (-22).
 
 ### Wi-Fi
 - wmt_loader/wmt_launcher start, but no wlan0 yet. Not investigated.
