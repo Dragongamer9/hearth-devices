@@ -1,0 +1,20 @@
+#!/bin/sh
+# Hearth RT8: power on the MediaTek Wi-Fi chip so wlan0 exists. On Android the
+# Wi-Fi HAL writes "1" to /dev/wmtWifi; with NetworkManager nothing does.
+# Waits for the WMT launcher (it loads the connsys patch first) and tries a few
+# times. Never fails the boot.
+log() { echo "hearth-wifi-on: $*"; }
+i=0
+while [ $i -lt 90 ]; do
+	[ -c /dev/wmtWifi ] && [ "$(getprop init.svc.wmt_launcher 2>/dev/null)" = running ] && break
+	sleep 1; i=$((i + 1))
+done
+[ -c /dev/wmtWifi ] || { log "no /dev/wmtWifi after 90 s"; exit 0; }
+sleep 3
+for try in 1 2 3; do
+	[ -e /sys/class/net/wlan0 ] && { log "wlan0 is up"; exit 0; }
+	echo 1 > /dev/wmtWifi 2>/dev/null || log "write to /dev/wmtWifi failed (try $try)"
+	sleep 5
+done
+[ -e /sys/class/net/wlan0 ] && log "wlan0 is up" || log "wlan0 did not appear"
+exit 0

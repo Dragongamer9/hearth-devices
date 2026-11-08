@@ -1,0 +1,12 @@
+[Unit]
+Description=Hearth: power on the Wi-Fi chip
+After=lxc-android-config.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+TimeoutStartSec=150
+ExecStart=/bin/sh /usr/libexec/hearth/wifi-on
+
+[Install]
+WantedBy=multi-user.target
