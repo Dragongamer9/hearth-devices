@@ -17,7 +17,7 @@ for i in $(seq 0 $((N - 1))); do
     OFF=$(printf '0x%x' $(( BASE + i * PIECE )))
     for try in 1 2 3 4 5; do
         echo "=== piece $((i+1))/$N at $OFF (try $try). If it says it is waiting, unplug the tablet and plug it back in."
-        if $MTK wo "$OFF" "$LEN" "$P" 2>&1 | tee "$W/last-mtk.log" | grep -q '^Wrote '; then
+        if $MTK wo "$OFF" "$LEN" "$P" 2>&1 | tee "$W/last-mtk.log" | grep -q 'Wrote '; then
             echo "$i" >> "$W/pieces-done.txt"; rm -f "$P"; echo "+++ piece $((i+1))/$N OK"; break
         fi
         sleep 2
