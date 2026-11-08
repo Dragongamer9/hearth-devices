@@ -84,6 +84,14 @@ fi
 if [ ! -e "$ROOT/etc/system-image/writable-paths" ] && [ -f "$w/ssh.service" ]; then
 	ln -sf /dev/null "$ROOT/etc/systemd/system/ssh.service"
 fi
+# Mantel's display scale. phosh's default is 3 (phone-sized); the owner chose
+# 1.25 for the RT8. Only written when there's no /etc/phosh/phoc.ini yet, so a
+# scale changed on the device is never overwritten.
+if [ -f "$ROOT/usr/share/phosh/phoc.ini" ] && [ ! -e "$ROOT/etc/phosh/phoc.ini" ]; then
+	mkdir -p "$ROOT/etc/phosh"
+	{ cat "$ROOT/usr/share/phosh/phoc.ini"; printf '\n[output:HWCOMPOSER-1]\nscale = 1.25\n'; } > "$ROOT/etc/phosh/phoc.ini"
+	chmod 644 "$ROOT/etc/phosh/phoc.ini"
+fi
 # An earlier build left this here; the container never picked it up.
 rm -f "$ROOT/var/lib/lxc/android/overrides/init.mt8781.rc"
 
