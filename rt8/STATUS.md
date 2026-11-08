@@ -34,13 +34,17 @@ Tested with the Ubuntu Touch 24.04 image on slot B, flashed with mtkclient.
   cts_firmware/update_from_file once the vendor partition is up. Never unbind the driver: that
   crashes the kernel.
 
+- Sound (2026-11-08): all four speakers play through the four aw883xx smart amps on i2c-8
+  (0x34-0x37, chip ID 0x2049), with pulseaudio and the MediaTek HAL. The amps share one reset
+  line, which the stock DT lists only on 0x34; patch 0010 lets the other three probe without it.
+  With only 0x34 running, sound came from the top-right speaker alone and seemed very quiet.
+
 ## Not working yet
 ### Battery reading at boot
 - The bootloader showed its low-battery screen with the battery at 47%; a second power-on
   booted normally. MTK_FG_NVRAM (fuel gauge calibration) fails to open in the container.
 
 ### Smaller issues
-- pulseaudio aborts: libsndcardparser.so missing, 32-bit awinic.audio.effect.so.
 - mediametrics/mediaserver32 need libstatspull.so.
 - Pen device ignored by libinput (no resolution).
 - Composer warns about plane alpha / pixel blend mode properties (-22).
