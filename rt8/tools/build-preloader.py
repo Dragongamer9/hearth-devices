@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 # Build a boot LU image (UFS_BOOT header + BRLYT + preloader) from the tablet's current boot1/boot2
 # dump and a new preloader .bin from a firmware package (GFH image starting with "MMM\x01").
-# Only writes the output when every layout check passes.
+# The header and BRLYT are kept; the preloader image is swapped, and the single BRLYT field that
+# holds the image end (or length) is updated. Only writes the output when every check passes.
 # usage: build-preloader.py <boot1 dump> <package preloader.bin> <out>
 import struct, sys
 
@@ -13,22 +14,31 @@ def fail(msg):
 
 if dump[:8] != b'UFS_BOOT': fail('dump does not start with UFS_BOOT')
 if pkg[:4] != b'MMM\x01': fail('package preloader does not start with MMM\\x01')
-brlyt = struct.unpack_from('<I', dump, 0x10)[0]
-if dump[brlyt:brlyt + 5] != b'BRLYT': fail('no BRLYT at 0x%x' % brlyt)
-start, end = struct.unpack_from('<II', dump, brlyt + 0xC)
-if dump[start:start + 4] != b'MMM\x01': fail('no preloader at 0x%x' % start)
+start = dump.find(b'MMM\x01')
+brlyt = dump.find(b'BRLYT', 0, start)
+if start <= 0 or brlyt <= 0: fail('could not find BRLYT and the preloader image')
 oldlen = struct.unpack_from('<I', dump, start + 0x20)[0]
 newlen = struct.unpack_from('<I', pkg, 0x20)[0]
-print('BRLYT at 0x%x, image start 0x%x, end field 0x%x' % (brlyt, start, end))
-print('old image length 0x%x (start+len = 0x%x), new image length 0x%x, package file 0x%x' % (
-    oldlen, start + oldlen, newlen, len(pkg)))
-print('BRLYT bytes:', dump[brlyt:brlyt + 0x24].hex())
+print('BRLYT at 0x%x, image at 0x%x, old length 0x%x, new length 0x%x, package file 0x%x' % (
+    brlyt, start, oldlen, newlen, len(pkg)))
+region = dump[brlyt:brlyt + 0x40]
+print('BRLYT:', region.hex(' '))
+fields = [(o, struct.unpack_from('<I', region, o)[0]) for o in range(0, 0x40, 4)]
+starts = [o for o, v in fields if v == start]
+ends = [o for o, v in fields if v in (start + oldlen, start + oldlen - 1)]
+lens = [o for o, v in fields if v == oldlen]
+print('start field at', [hex(o) for o in starts], '| end field at', [hex(o) for o in ends], '| length field at', [hex(o) for o in lens])
 if newlen > len(pkg) or newlen < 0x10000: fail('package length field looks wrong')
 if start + newlen > len(dump): fail('new image does not fit')
-if end not in (start + oldlen, start + oldlen - 1): fail('BRLYT end field is not start+length; layout unknown')
-newend = start + newlen - (start + oldlen - end)
+if len(starts) != 1 or len(ends) + len(lens) != 1:
+    fail('BRLYT layout not recognised')
 out = bytearray(dump[:start]) + pkg[:newlen]
 out += b'\0' * (len(dump) - len(out))
-struct.pack_into('<I', out, brlyt + 0x10, newend)
+if ends:
+    o = brlyt + ends[0]; old = struct.unpack_from('<I', out, o)[0]
+    new = old - (start + oldlen) + start + newlen
+else:
+    o = brlyt + lens[0]; old = oldlen; new = newlen
+struct.pack_into('<I', out, o, new)
 open(sys.argv[3], 'wb').write(out)
-print('OK: wrote %s (%d bytes), end field 0x%x -> 0x%x' % (sys.argv[3], len(out), end, newend))
+print('OK: wrote %s (%d bytes), BRLYT field at 0x%x: 0x%x -> 0x%x' % (sys.argv[3], len(out), o, old, new))
