@@ -61,6 +61,7 @@ put usr/libexec/hearth/vndk-apex
 put usr/lib/systemd/system/lightdm.service.d/hearth-composer-only.conf
 put usr/lib/systemd/system/hearth-wifi-on.service
 put usr/libexec/hearth/wifi-on
+put usr/lib/NetworkManager/conf.d/hearth-wifi.conf
 chmod 755 "$ROOT/usr/libexec/hearth" "$ROOT/usr/libexec/hearth/vndk-apex" "$ROOT/usr/libexec/hearth/wifi-on"
 mkdir -p "$w/lxc-android-config.service.wants"
 ln -sf ../hearth-vndk-apex.service "$w/lxc-android-config.service.wants/hearth-vndk-apex.service"
