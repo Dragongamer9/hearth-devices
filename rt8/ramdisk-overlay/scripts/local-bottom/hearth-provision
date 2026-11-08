@@ -69,7 +69,8 @@ put usr/libexec/hearth/touch-fw
 put usr/lib/systemd/system/phosh.service.d/hearth-mantel.conf
 put usr/libexec/hearth/mantel-session
 put usr/libexec/hearth/mantel-shell
-chmod 755 "$ROOT/usr/libexec/hearth" "$ROOT/usr/libexec/hearth/vndk-apex" "$ROOT/usr/libexec/hearth/host-apex" "$ROOT/usr/libexec/hearth/wifi-on" "$ROOT/usr/libexec/hearth/touch-fw" "$ROOT/usr/libexec/hearth/mantel-session" "$ROOT/usr/libexec/hearth/mantel-shell"
+put usr/libexec/hearth/mantel-labwc
+chmod 755 "$ROOT/usr/libexec/hearth" "$ROOT/usr/libexec/hearth/vndk-apex" "$ROOT/usr/libexec/hearth/host-apex" "$ROOT/usr/libexec/hearth/wifi-on" "$ROOT/usr/libexec/hearth/touch-fw" "$ROOT/usr/libexec/hearth/mantel-session" "$ROOT/usr/libexec/hearth/mantel-shell" "$ROOT/usr/libexec/hearth/mantel-labwc"
 mkdir -p "$w/lxc-android-config.service.wants"
 ln -sf ../hearth-vndk-apex.service "$w/lxc-android-config.service.wants/hearth-vndk-apex.service"
 # Droidian starts the container with lxc@android instead.
@@ -84,7 +85,14 @@ fi
 if [ ! -e "$ROOT/etc/system-image/writable-paths" ] && [ -f "$w/ssh.service" ]; then
 	ln -sf /dev/null "$ROOT/etc/systemd/system/ssh.service"
 fi
-# Mantel's display: phosh's default scale is 3 (phone-sized); the owner chose
+# Mantel (labwc) rotation and scale: the owner chose landscape at 1.25. Created
+# once; a value changed on the device is never overwritten.
+if [ ! -e "$ROOT/etc/hearth/display" ]; then
+	mkdir -p "$ROOT/etc/hearth"
+	printf '# Hearth Mantel screen (read by /usr/libexec/hearth/mantel-labwc at session start)\nTRANSFORM=270\nSCALE=1.25\n' > "$ROOT/etc/hearth/display"
+	chmod 644 "$ROOT/etc/hearth/display"
+fi
+# Mantel's display (phoc fallback): phosh's default scale is 3 (phone-sized); the owner chose
 # 1.25 and landscape (rotate = 90; phoc's key is "rotate", not "transform").
 # Only written when there's no /etc/phosh/phoc.ini yet, so a
 # scale changed on the device is never overwritten.

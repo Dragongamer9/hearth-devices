@@ -1,0 +1,47 @@
+#!/bin/bash -l
+# labwc on Droidian's hwcomposer. The login profile (-l) supplies Droidian's
+# LD_PRELOAD (libtls-padding.so): without it the Mali driver crashes on the
+# bionic/glibc thread-local-storage clash.
+export EGL_PLATFORM=hwcomposer WLR_BACKENDS=hwcomposer,libinput WLR_HWC_SKIP_VERSION_CHECK=1
+export XDG_CURRENT_DESKTOP=Hearth:wlroots XDG_SESSION_DESKTOP=hearth
+
+# Rotation and scale. labwc (patched) applies them in the screen's first
+# frame; changing them later on the hwcomposer screen garbles it. The owner
+# chose landscape (270) at 1.25. /etc/hearth/display is the device's own
+# setting: provisioning creates it once and never overwrites it.
+TRANSFORM=270 SCALE=1.25
+[ -f /etc/hearth/display ] && . /etc/hearth/display
+export HEARTH_OUTPUT_TRANSFORM="$TRANSFORM" HEARTH_OUTPUT_SCALE="$SCALE"
+
+# Touch follows the rotation (the panel reports portrait coordinates).
+case "$TRANSFORM" in
+	90) TOUCH="0 -1 1 1 0 0" ;;
+	180) TOUCH="-1 0 1 0 -1 1" ;;
+	270) TOUCH="0 1 0 -1 0 1" ;;
+	*) TOUCH="1 0 0 0 1 0" ;;
+esac
+
+# labwc config: Hearth Desktop Mode's rc.xml plus the touch rotation, built
+# fresh each start in the runtime dir (nothing written to the user's files).
+cfg="$XDG_RUNTIME_DIR/hearth-labwc"
+mkdir -p "$cfg"
+shell=$(/usr/libexec/hearth/mantel-shell --path)
+rc=
+for f in /usr/share/hearth/labwc/rc.xml "$shell/../labwc/rc.xml"; do
+	[ -f "$f" ] && { rc=$f; break; }
+done
+touchxml="<libinput><device category=\"touch\"><calibrationMatrix>$TOUCH</calibrationMatrix></device></libinput>"
+if [ -n "$rc" ] && grep -q '</labwc_config>' "$rc"; then
+	sed "s#</labwc_config>#  $touchxml\n</labwc_config>#" "$rc" > "$cfg/rc.xml"
+else
+	printf '<?xml version="1.0"?>\n<labwc_config>\n  %s\n</labwc_config>\n' "$touchxml" > "$cfg/rc.xml"
+fi
+for f in themerc themerc-override menu.xml environment; do
+	[ -n "$rc" ] && [ -f "${rc%/*}/$f" ] && cp "${rc%/*}/$f" "$cfg/$f"
+done
+cat > "$cfg/autostart" <<'AUTO'
+dbus-update-activation-environment --systemd WAYLAND_DISPLAY XDG_CURRENT_DESKTOP XDG_SESSION_TYPE >/dev/null 2>&1 &
+# Keep the shell up: restart it if it closes (labwc keeps running either way).
+( while pgrep -x labwc >/dev/null; do /usr/libexec/hearth/mantel-shell; sleep 1; done ) &
+AUTO
+exec /opt/labwc/bin/labwc -C "$cfg"

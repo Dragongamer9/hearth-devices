@@ -1,12 +1,14 @@
 #!/bin/sh
-# Hearth Mantel session on Droidian: phoc as the compositor, Hearth's
-# Quickshell shell in place of phosh. Started by phosh.service (see
-# phosh.service.d/hearth-mantel.conf), so Droidian's hwcomposer wiring,
-# PAM session and auto-login all stay as they are.
+# Hearth Mantel session on Droidian, started by phosh.service (see
+# phosh.service.d/hearth-mantel.conf), so Droidian's hwcomposer wiring, PAM
+# session and auto-login stay as they are.
 #
-# Safety: if Quickshell or the Hearth shell isn't installed, run stock
-# phosh instead, so the screen always comes up with something usable.
-export XDG_CURRENT_DESKTOP=Hearth XDG_SESSION_DESKTOP=hearth QT_QPA_PLATFORM=wayland
+#   1. labwc + Hearth's Quickshell shell: PC-style windows (title bars, move,
+#      resize, minimize), the same compositor as Hearth Desktop Mode on PCs.
+#   2. If labwc isn't installed: phoc + the Hearth shell.
+#   3. If Quickshell or the shell isn't installed: stock phosh.
+# So the screen always comes up with something usable.
+export XDG_CURRENT_DESKTOP=Hearth XDG_SESSION_DESKTOP=hearth
 [ -n "$XDG_RUNTIME_DIR" ] || export XDG_RUNTIME_DIR=/run/user/$(id -u)
 export DBUS_SESSION_BUS_ADDRESS="unix:path=$XDG_RUNTIME_DIR/bus"
 
@@ -14,15 +16,17 @@ if [ ! -x /opt/quickshell/bin/quickshell ] || [ -z "$(/usr/libexec/hearth/mantel
 	exec /usr/bin/phosh-session
 fi
 
-# Desktop windows instead of phone ones: phoc stops forcing every window to
-# full screen, and GTK title bars get minimize/maximize/close. Applied once
-# per user (marker file), so anything the user changes later is kept.
+# Desktop windows instead of phone ones (phoc: no forced full screen; GTK title
+# bars: minimize/maximize/close). Applied once per user (marker file), so
+# anything the user changes later is kept.
 mark="$HOME/.config/hearth/mantel-desktop-defaults"
 if [ ! -e "$mark" ] && command -v gsettings >/dev/null; then
 	gsettings set sm.puri.phoc auto-maximize false 2>/dev/null
 	gsettings set org.gnome.desktop.wm.preferences button-layout 'appmenu:minimize,maximize,close' 2>/dev/null
 	mkdir -p "${mark%/*}" && : > "$mark"
 fi
+
+[ -x /opt/labwc/bin/labwc ] && exec /usr/libexec/hearth/mantel-labwc
 
 INI=/usr/share/phosh/phoc.ini; [ -f /etc/phosh/phoc.ini ] && INI=/etc/phosh/phoc.ini
 set --; [ -f "$INI" ] && set -- -C "$INI"
