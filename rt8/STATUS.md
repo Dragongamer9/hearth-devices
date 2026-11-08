@@ -55,3 +55,8 @@ Tested with the Ubuntu Touch 24.04 image on slot B, flashed with mtkclient.
 - Firmware: Oukitel P556_OQ_P10B_8781_U0_EEA_V2.1.5_S260828. Slot A is active; slot B still holds
   our build (b25).
 - To return to our build later: write the saved misc.bin (slot B active) back with mtkclient.
+- The first attempt to boot slot A hung on the logo. The tablet's boot1 preloader was from 2026-03-17
+  and crashed the 2026-08-28 LK (watchdog reset in LK, 7 failed tries, then fallback to slot B).
+- boot2 already held the August preloader. `tools/build-preloader.py` rebuilt boot1 from the package
+  .bin; its output matched boot2 byte for byte. boot1 was written, read back and verified, then
+  slot A was set again. The original boot1/boot2 dumps are in ~/Downloads/rt8-restore.
