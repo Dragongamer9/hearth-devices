@@ -60,3 +60,8 @@ Tested with the Ubuntu Touch 24.04 image on slot B, flashed with mtkclient.
 - boot2 already held the August preloader. `tools/build-preloader.py` rebuilt boot1 from the package
   .bin; its output matched boot2 byte for byte. boot1 was written, read back and verified, then
   slot A was set again. The original boot1/boot2 dumps are in ~/Downloads/rt8-restore.
+- Before switching back to slot B: slot B's LK and firmware are still from March and would crash
+  under the August preloader, so write the August firmware to slot B first with
+  `tools/firmware-to-slot.sh <fw dir> b <work dir>`. Our boot_b and vendor_boot_b stay as they are.
+- Then reinstall the test userspace. The rootfs lives on userdata as /data/ubuntu.img (CI artifact
+  hearth-rt8-testimage, ubuntu.img.gz). Android's factory reset left userdata as Android's own f2fs.
