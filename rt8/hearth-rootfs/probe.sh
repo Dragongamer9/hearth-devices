@@ -59,7 +59,9 @@ for m in dev dev/pts proc sys; do mkdir -p "$H/$m"; mount --bind "/$m" "$H/$m"; 
 rm -f "$H/etc/resolv.conf"; cp /etc/resolv.conf "$H/etc/resolv.conf"
 mkdir -p "$H/etc/apt/sources.list.d" "$H/usr/share/keyrings" "$H/etc/apt/trusted.gpg.d"
 for f in $(ls "$D/etc/apt/sources.list.d/"); do
-	case "$f" in *droidian*|*hybris*|*halium*|*adaptation*|*mobian*) chroot "$D" cat "/etc/apt/sources.list.d/$f" > "$H/etc/apt/sources.list.d/$f";; esac
+	# droidian+http is Droidian's own apt transport (apt-transport-droidian);
+	# plain http reaches the same archive.
+	case "$f" in *droidian*|*hybris*|*halium*|*adaptation*|*mobian*) chroot "$D" cat "/etc/apt/sources.list.d/$f" | sed 's#droidian+http://#http://#' > "$H/etc/apt/sources.list.d/$f";; esac
 done
 for k in droidian.gpg hybris-mobian.gpg mobian.gpg; do chroot "$D" cat "/etc/apt/trusted.gpg.d/$k" > "$H/etc/apt/trusted.gpg.d/$k" 2>/dev/null; done
 for k in $(ls "$D/usr/share/keyrings" | grep -iE 'droidian|mobian'); do chroot "$D" cat "/usr/share/keyrings/$k" > "$H/usr/share/keyrings/$k"; done
