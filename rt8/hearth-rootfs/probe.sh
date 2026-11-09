@@ -27,10 +27,14 @@ IMG=$(find "$WORK/zip" -type f -name '*.img' -printf '%s %p\n' | sort -rn | head
 if file -b "$IMG" | grep -qi 'android sparse'; then simg2img "$IMG" "$WORK/r.img"; IMG="$WORK/r.img"; fi
 mount -o ro,loop "$IMG" "$D" || { say "cannot mount $IMG"; exit 1; }
 
-say "== droidian os-release"; grep -E '^(PRETTY_NAME|VERSION_CODENAME)=' "$D/etc/os-release" | tee -a "$REPORT"
+# Read Droidian's files through chroot: many are absolute symlinks.
+say "== droidian os-release"; chroot "$D" cat /etc/os-release | grep -E '^(PRETTY_NAME|VERSION_CODENAME)=' | tee -a "$REPORT"
 say "== droidian glibc: $(chroot "$D" dpkg-query -W -f '${Version}' libc6 2>/dev/null)"
 say "== droidian apt sources"
-cat "$D"/etc/apt/sources.list "$D"/etc/apt/sources.list.d/*.list "$D"/etc/apt/sources.list.d/*.sources 2>/dev/null | grep -vE '^\s*(#|$)' | tee -a "$REPORT"
+for f in $(ls "$D/etc/apt/sources.list.d/" 2>/dev/null); do
+	say "-- $f -> $(readlink "$D/etc/apt/sources.list.d/$f")"
+	chroot "$D" cat "/etc/apt/sources.list.d/$f" | grep -vE '^\s*(#|$)' | tee -a "$REPORT"
+done
 say "== droidian keyrings"; ls "$D"/usr/share/keyrings "$D"/etc/apt/trusted.gpg.d 2>/dev/null | tee -a "$REPORT"
 
 # Packages Droidian adds: anything not from Debian's own archive.
@@ -44,16 +48,21 @@ grep -Ff "$OUT/droidian-own.txt" "$OUT/droidian-all.txt" | tee -a "$REPORT"
 
 # --- Hearth side ----------------------------------------------------------
 zstd -dc "$TAR" | tar -x -C "$H" --numeric-owner 2>/dev/null
+# The image keeps /var empty (bootc); its tmpfiles rules recreate the dpkg link
+# and apt's folders on boot. Do the same here.
+systemd-tmpfiles --create --root="$H" 2>&1 | tail -3
+[ -e "$H/var/lib/dpkg/status" ] || { mkdir -p "$H/var/lib"; ln -sfn /usr/lib/sysimage/dpkg "$H/var/lib/dpkg"; }
+mkdir -p "$H/var/lib/apt/lists/partial" "$H/var/cache/apt/archives/partial"
 say "== hearth os-release"; grep -E '^(PRETTY_NAME|VERSION_CODENAME)=' "$H/etc/os-release" "$H/usr/lib/os-release" 2>/dev/null | tee -a "$REPORT"
 say "== hearth glibc: $(chroot "$H" dpkg-query -W -f '${Version}' libc6 2>/dev/null)"
 for m in dev dev/pts proc sys; do mkdir -p "$H/$m"; mount --bind "/$m" "$H/$m"; done
 rm -f "$H/etc/resolv.conf"; cp /etc/resolv.conf "$H/etc/resolv.conf"
 mkdir -p "$H/etc/apt/sources.list.d" "$H/usr/share/keyrings" "$H/etc/apt/trusted.gpg.d"
-for f in "$D"/etc/apt/sources.list.d/*; do
-	case "$(basename "$f")" in *droidian*|*hybris*|*halium*|*adaptation*) cp "$f" "$H/etc/apt/sources.list.d/";; esac
+for f in $(ls "$D/etc/apt/sources.list.d/"); do
+	case "$f" in *droidian*|*hybris*|*halium*|*adaptation*|*mobian*) chroot "$D" cat "/etc/apt/sources.list.d/$f" > "$H/etc/apt/sources.list.d/$f";; esac
 done
-cp -n "$D"/usr/share/keyrings/*droidian* "$H/usr/share/keyrings/" 2>/dev/null
-cp -n "$D"/etc/apt/trusted.gpg.d/* "$H/etc/apt/trusted.gpg.d/" 2>/dev/null
+for k in droidian.gpg hybris-mobian.gpg mobian.gpg; do chroot "$D" cat "/etc/apt/trusted.gpg.d/$k" > "$H/etc/apt/trusted.gpg.d/$k" 2>/dev/null; done
+for k in $(ls "$D/usr/share/keyrings" | grep -iE 'droidian|mobian'); do chroot "$D" cat "/usr/share/keyrings/$k" > "$H/usr/share/keyrings/$k"; done
 say "== sources added to hearth"; ls "$H/etc/apt/sources.list.d" | tee -a "$REPORT"
 chroot "$H" apt-get update 2>&1 | tail -15 | tee -a "$REPORT"
 
