@@ -26,7 +26,7 @@ PREFIX_LABWC=/opt/labwc
 # --- apt sources: our trixie rebuilds, plus Droidian for sources + arch-indep.
 apt-get update -q
 apt-get install -y -q --no-install-recommends ca-certificates gnupg git meson ninja-build \
-	build-essential pkg-config devscripts equivs quilt >/dev/null
+	build-essential pkg-config devscripts equivs quilt zstd >/dev/null
 cp "$KEY" /etc/apt/trusted.gpg.d/droidian.gpg
 cat > /etc/apt/sources.list.d/droidian.sources <<'EOF'
 Types: deb deb-src
