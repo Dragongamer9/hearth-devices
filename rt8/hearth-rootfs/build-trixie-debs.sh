@@ -54,13 +54,17 @@ for arg in "$@"; do
 		echo "$pkg: FAIL no source found" | tee -a "$REPORT"; echo "::endgroup::"; continue
 	fi
 	cd "$dir"
-	# Droidian's build tooling writes debian/changelog at build time.
-	if [ ! -f debian/changelog ]; then
-		DEBEMAIL="Dragongamer9 <game305.cl@gmail.com>" dch --create --package "$pkg" -v "${ver}~deb13" -D trixie \
-			"Rebuilt from Droidian's sources for Debian 13 (Hearth OS)." >/dev/null 2>&1
+	# Droidian's build tooling writes the changelog entry (and so the version)
+	# at build time; the one in git is stale. Give it Droidian's version so the
+	# packages that depend on it (adaptation-*, droidian-quirks-*) are satisfied.
+	export DEBEMAIL="Dragongamer9 <game305.cl@gmail.com>"
+	if [ -f debian/changelog ]; then
+		dch -b -v "${ver}~deb13" -D trixie "Rebuilt from Droidian's sources for Debian 13 (Hearth OS)." >/dev/null 2>&1
+	else
+		dch --create --package "$pkg" -v "${ver}~deb13" -D trixie "Rebuilt from Droidian's sources for Debian 13 (Hearth OS)." >/dev/null 2>&1
 	fi
 	if ! mk-build-deps -i -r -t 'apt-get -y -q --no-install-recommends' debian/control > ../builddeps.log 2>&1; then
-		echo "$pkg: FAIL build deps ($how): $(grep -E 'Depends|E:|but' ../builddeps.log | head -8 | tr '\n' ' ' | cut -c1-700)" | tee -a "$REPORT"
+		echo "$pkg: FAIL build deps ($how): $(grep -vE '^(Get|Reading|Building|Selecting|Preparing|Unpacking|Setting up|Processing)' ../builddeps.log | tail -12 | tr '\n' ' ' | cut -c1-900)" | tee -a "$REPORT"
 		echo "::endgroup::"; continue
 	fi
 	if dpkg-buildpackage -b -uc -us -j"$(nproc)" > ../build.log 2>&1; then
