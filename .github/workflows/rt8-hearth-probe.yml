@@ -1,0 +1,80 @@
+name: RT8 Hearth probe
+
+# Can Droidian's RT8 hardware layer (libhybris, the Android container, audio)
+# be installed on top of the Hearth OS arm64 image? Simulate only; nothing is
+# published. Needs a recent green "Hearth OS (Peppermint base, arm64)" run in
+# Dragongamer9/hearth-os (its CI-only filesystem artifact lives 7 days).
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: hearth-os run id to take the arm64 filesystem from (blank = newest green one)
+        required: false
+  push:
+    paths:
+      - 'rt8/hearth-rootfs/**'
+      - '.github/workflows/rt8-hearth-probe.yml'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends unzip file e2fsprogs android-sdk-libsparse-utils zstd
+
+      - name: Find the Hearth OS arm64 build
+        id: hearth
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          id="${{ inputs.run_id }}"
+          if [ -z "$id" ]; then
+            id=$(gh api "repos/Dragongamer9/hearth-os/actions/workflows/base-peppermint-arm64.yml/runs?status=success&per_page=20" \
+              -q '.workflow_runs[].id' | while read -r r; do
+                n=$(gh api "repos/Dragongamer9/hearth-os/actions/runs/$r/artifacts" -q '[.artifacts[] | select(.name=="hearth-peppermint-arm64-rootfs" and (.expired|not))] | length')
+                [ "$n" -gt 0 ] && { echo "$r"; break; }
+              done)
+          fi
+          [ -n "$id" ] || { echo "::error::no green hearth-os arm64 run with the filesystem artifact (it is kept 7 days)"; exit 1; }
+          echo "::notice title=Hearth OS arm64::run $id"
+          echo "id=$id" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: hearth-peppermint-arm64-rootfs
+          repository: Dragongamer9/hearth-os
+          run-id: ${{ steps.hearth.outputs.id }}
+          github-token: ${{ github.token }}
+          path: hearth
+
+      - name: Download Droidian's generic arm64 rootfs
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view --repo droidian-images/droidian --json tagName,assets \
+            -q '.tagName, (.assets[].name)' > assets.txt
+          name=$(grep -E 'phosh-phone-rootfs-api33-arm64.*\.zip$' assets.txt | head -1)
+          [ -n "$name" ] || { echo "::error::no api33 arm64 rootfs zip in the latest Droidian release"; exit 1; }
+          echo "::notice title=Droidian base::$name"
+          gh release download --repo droidian-images/droidian "$(head -1 assets.txt)" -p "$name" -D dl
+
+      - name: Probe
+        run: |
+          sudo bash rt8/hearth-rootfs/probe.sh dl/*.zip hearth/hearth-peppermint-arm64-rootfs.tar.zst out
+          sudo chown -R "$USER" out
+          cat out/probe.txt
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: rt8-hearth-probe
+          path: out/
