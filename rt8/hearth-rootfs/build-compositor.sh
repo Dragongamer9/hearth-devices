@@ -62,8 +62,15 @@ stage_libdroid() {
 	dpkg-buildpackage -b -uc -us -j"$(nproc)" > /tmp/lb.log 2>&1 \
 		|| { say "libdroid: FAIL build: $(tail -12 /tmp/lb.log | tr '\n' ' ' | cut -c1-500)"; return 1; }
 	cp ../*.deb "$OUT/" 2>/dev/null
-	apt-get install -y -q ../libdroid*.deb 2>&1 | tail -2
-	say "libdroid: OK $(cd .. && ls libdroid*.deb | tr '\n' ' ')"
+	# Install the runtime + -dev (not the dbgsym packages, whose deps abort the
+	# whole transaction and leave -dev uninstalled).
+	rm -f ../*-dbgsym_*.deb
+	dpkg -i ../libdroid*.deb 2>/tmp/li.log; apt-get -y -q -f install >/dev/null 2>&1
+	if pkg-config --exists libdroid-0; then
+		say "libdroid: OK (libdroid-0 $(pkg-config --modversion libdroid-0)) $(cd .. && ls libdroid*.deb | tr '\n' ' ')"
+	else
+		say "libdroid: built but libdroid-0.pc not found: $(ls /usr/lib/*/pkgconfig/libdroid* 2>&1); $(tail -3 /tmp/li.log | tr '\n' ' ')"
+	fi
 }
 stage_libdroid || say "== libdroid stage failed; wlroots droidian-extensions may not build"
 

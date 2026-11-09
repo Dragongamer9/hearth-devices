@@ -3,13 +3,14 @@
 # the RT8 hardware layer (libhybris, the Android container, Halium wrappers)
 # rebuilt for Debian 13. Runs on an arm64 host (CI: ubuntu-24.04-arm) as root.
 #
-#   build-hearth-rootfs.sh <hearth-peppermint-arm64-rootfs.tar.zst> <trixie debs dir> <droidian.gpg> <out dir>
+#   build-hearth-rootfs.sh <hearth-peppermint-arm64-rootfs.tar.zst> <trixie debs dir> <droidian.gpg> <out dir> [compositor opt.tar.zst]
 #
 # Writes <out>/rootfs.img (goes to /userdata/rootfs.img on the tablet, in
-# place of Droidian's) and <out>/report.txt. Milestone A: it boots to SSH with
-# the Android container up; the Hearth session on the panel is milestone B.
+# place of Droidian's) and <out>/report.txt. Boots the Hearth session on the
+# panel when given the compositor tarball (/opt/labwc + /opt/wlroots-hearth).
 set -euo pipefail
 TAR=$(realpath "$1"); DEBS=$(realpath "$2"); KEY=$(realpath "$3"); OUT=$(realpath -m "$4")
+COMPOSITOR="${5:-}"; [ -n "$COMPOSITOR" ] && COMPOSITOR=$(realpath "$COMPOSITOR")
 HERE=$(cd "$(dirname "$0")" && pwd)
 RT8=$(cd "$HERE/.." && pwd)
 WORK=$(mktemp -d); MNT="$WORK/mnt"
@@ -92,13 +93,10 @@ chroot "$MNT" apt-get clean
 rm -f "$MNT"/etc/ssh/ssh_host_*
 
 # 4. RT8 bits: writable root (the Halium initramfs mounts it read-only
-#    without this), the boot-OK check behind the automatic fallback.
+#    without this). The boot-OK check is installed below (4c) at a path the
+#    boot ramdisk's provisioning does not wipe.
 touch "$MNT/.writable_image"
-echo "Hearth OS RT8 rootfs, milestone A (Hearth OS arm64 + RT8 hardware layer)" > "$MNT/etc/hearth-rt8-rootfs"
-install -D -m 644 "$RT8/rootfs/files/usr/lib/systemd/system/hearth-boot-ok.service" "$MNT/usr/lib/systemd/system/hearth-boot-ok.service"
-install -D -m 755 "$RT8/rootfs/files/usr/libexec/hearth/boot-ok" "$MNT/usr/libexec/hearth/boot-ok"
-mkdir -p "$MNT/usr/lib/systemd/system/multi-user.target.wants"
-ln -sf ../hearth-boot-ok.service "$MNT/usr/lib/systemd/system/multi-user.target.wants/hearth-boot-ok.service"
+echo "Hearth OS RT8 rootfs (Hearth OS arm64 + RT8 hardware layer + compositor)" > "$MNT/etc/hearth-rt8-rootfs"
 
 # 4a. The Hearth user and the session launcher (milestone B: the shell on the
 #     panel). The PC installer makes the human user; the RT8 is flashed
@@ -131,6 +129,29 @@ if [ -d "$MNT/usr/share/nimbus/desktop/shell" ] && [ ! -e "$MNT/usr/share/hearth
 	mkdir -p "$MNT/usr/share/hearth"
 	ln -sfn /usr/share/nimbus/desktop/shell "$MNT/usr/share/hearth/shell"
 fi
+say "shell entry: $(ls "$MNT/usr/share/hearth/shell/shell.qml" 2>&1 | sed 's#.*/usr/share#/usr/share#')"
+
+# The hwcomposer compositor (patched labwc + wlroots) the panel needs. The
+# provisioning scripts exec /opt/labwc/bin/labwc and /opt/quickshell/bin/
+# quickshell; stock labwc on the image can't drive hwcomposer, so ship ours
+# in /opt and point /opt/quickshell at the image's quickshell.
+if [ -n "$COMPOSITOR" ] && [ -f "$COMPOSITOR" ]; then
+	zstd -dc "$COMPOSITOR" | tar -x -C "$MNT"
+	echo "/opt/wlroots-hearth/lib/aarch64-linux-gnu" > "$MNT/etc/ld.so.conf.d/hearth-wlroots.conf"
+	echo "/opt/wlroots-hearth/lib" >> "$MNT/etc/ld.so.conf.d/hearth-wlroots.conf"
+	chroot "$MNT" ldconfig 2>/dev/null || true
+	say "compositor: $(ls -l "$MNT/opt/labwc/bin/labwc" 2>&1 | sed 's#.*/opt#/opt#')"
+else
+	say "compositor: NONE (panel will stay dark; session falls back and exits)"
+fi
+if [ -x "$MNT/usr/bin/quickshell" ] && [ ! -e "$MNT/opt/quickshell/bin/quickshell" ]; then
+	mkdir -p "$MNT/opt/quickshell/bin"
+	ln -sfn /usr/bin/quickshell "$MNT/opt/quickshell/bin/quickshell"
+fi
+# The device display setting the Mantel scripts read (provisioning also writes
+# it once; this is the fallback). Landscape at 1.25, as worked out on Droidian.
+mkdir -p "$MNT/etc/hearth"
+[ -f "$MNT/etc/hearth/display" ] || printf 'TRANSFORM=270\nSCALE=1.25\n' > "$MNT/etc/hearth/display"
 # greetd: autologin the Hearth user into the Mantel session. mantel-session
 # (from provisioning) falls back to a bare labwc if its pieces are missing, so
 # a blank screen still gives a cursor to debug from over SSH.
@@ -158,7 +179,48 @@ chroot "$MNT" systemctl disable sddm.service bootc-fetch-apply-updates.timer nim
 # display-manager.service points at greetd (set above), not SDDM.
 ln -sfn /usr/lib/systemd/system/greetd.service "$MNT/etc/systemd/system/display-manager.service"
 
-# 5. Report what milestone B (the Hearth session on the panel) has to work with.
+# 4b. Hearth OS is a bootc/ostree image; its ostree + bootc units expect the
+#     ostree initramfs to have set up the deployment first. The tablet uses
+#     Halium's initramfs, which switch_roots the flat tree, so those units run
+#     with nothing to act on and fail the boot. Mask them: boot the flat tree
+#     as an ordinary Debian system. (Found by hand on the first flash.)
+for u in ostree-prepare-root ostree-remount ostree-finalize-staged ostree-finalize-staged-hold \
+         ostree-boot-complete ostree-state-overlay@ bootc-root-setup bootc-finalize-staged \
+         bootc-finalize-staged-hold bootc-fetch-apply-updates bootc-status-updated-onboot \
+         bootc-sysusers-shadow-sync bootc-destructive-cleanup bootc-publish-rhsm-facts \
+         systemd-firstboot; do
+	ln -sfn /dev/null "$MNT/etc/systemd/system/$u.service"
+done
+# Persist the journal so a failed boot can be read back from the image.
+mkdir -p "$MNT/var/log/journal"
+
+# 4c. boot-ok: the boot ramdisk's fallback renames rootfs.img -> .failed after
+#     two boots unless a good start clears its counter. The ramdisk wipes
+#     /usr/libexec/hearth every boot, so keep boot-ok where it survives and run
+#     it from graphical.target once labwc is up.
+install -D -m 755 "$RT8/rootfs/files/usr/libexec/hearth/boot-ok" "$MNT/usr/libexec/hearth-rt8/boot-ok"
+cat > "$MNT/usr/lib/systemd/system/hearth-boot-ok.service" <<'EOF'
+[Unit]
+Description=Hearth RT8: mark this start good (clears the boot-fallback counter)
+After=graphical.target
+Wants=graphical.target
+
+[Service]
+Type=oneshot
+ExecStartPre=/bin/sleep 45
+ExecStart=/usr/libexec/hearth-rt8/boot-ok
+RemainAfterExit=yes
+
+[Install]
+WantedBy=graphical.target
+EOF
+mkdir -p "$MNT/usr/lib/systemd/system/graphical.target.wants"
+ln -sfn ../hearth-boot-ok.service "$MNT/usr/lib/systemd/system/graphical.target.wants/hearth-boot-ok.service"
+# Remove the earlier multi-user link/binary this build made before the move.
+rm -f "$MNT/usr/lib/systemd/system/multi-user.target.wants/hearth-boot-ok.service" \
+	"$MNT/usr/libexec/hearth/boot-ok"
+
+# 5. Report what the Hearth session on the panel has to work with.
 set +e +o pipefail
 {
 	echo "== installed hardware layer"
