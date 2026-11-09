@@ -101,15 +101,16 @@ mkdir -p "$MNT/usr/lib/systemd/system/multi-user.target.wants"
 ln -sf ../hearth-boot-ok.service "$MNT/usr/lib/systemd/system/multi-user.target.wants/hearth-boot-ok.service"
 
 # 4a. The Hearth user and the session launcher (milestone B: the shell on the
-#     panel). The arm64 image ships no uid-1000 user (an installer makes it on
-#     PCs); the RT8 is flashed straight, so make it here.
+#     panel). The PC installer makes the human user; the RT8 is flashed
+#     straight, so make it here. uid 1000 is NOT free: the Android adaptation
+#     took it for its 'system' account (uid 1000 is 'system' on Android), so
+#     give Hearth its own uid above the Android range.
 say "== session"
-# The image already carries a uid-1000 user (its default account). Use that as
-# the session user rather than forcing a new one.
-SU=$(chroot "$MNT" id -nu 1000 2>/dev/null || true)
-if [ -z "$SU" ]; then
-	chroot "$MNT" useradd -m -s /bin/bash -G sudo,video,render,input,audio,plugdev,netdev hearth 2>>"$REPORT" || true
-	SU=hearth
+SU=hearth
+if ! chroot "$MNT" id "$SU" >/dev/null 2>&1; then
+	chroot "$MNT" useradd -m -u 2000 -U -s /bin/bash -d /var/home/hearth \
+		-G sudo,netdev "$SU" 2>>"$REPORT" \
+		|| chroot "$MNT" useradd -m -s /bin/bash "$SU" 2>>"$REPORT" || true
 fi
 say "session user: $SU (uid $(chroot "$MNT" id -u "$SU" 2>/dev/null))"
 # The seat/render/input groups the hwcomposer session needs; add only those
