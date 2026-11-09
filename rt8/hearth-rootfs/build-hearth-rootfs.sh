@@ -129,7 +129,13 @@ if [ -d "$MNT/usr/share/nimbus/desktop/shell" ] && [ ! -e "$MNT/usr/share/hearth
 	mkdir -p "$MNT/usr/share/hearth"
 	ln -sfn /usr/share/nimbus/desktop/shell "$MNT/usr/share/hearth/shell"
 fi
-say "shell entry: $(ls "$MNT/usr/share/hearth/shell/shell.qml" 2>&1 | sed 's#.*/usr/share#/usr/share#')"
+# Check the real file (not through the absolute symlink, which would resolve
+# against the build host). mantel-shell needs shell.qml in the shell dir.
+if [ -f "$MNT/usr/share/nimbus/desktop/shell/shell.qml" ]; then
+	say "shell entry: /usr/share/nimbus/desktop/shell/shell.qml present"
+else
+	say "shell entry: MISSING shell.qml -> $(ls "$MNT/usr/share/nimbus/desktop/shell/" 2>&1 | head -3 | tr '\n' ' ')"
+fi
 
 # The hwcomposer compositor (patched labwc + wlroots) the panel needs. The
 # provisioning scripts exec /opt/labwc/bin/labwc and /opt/quickshell/bin/
