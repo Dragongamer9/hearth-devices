@@ -36,7 +36,7 @@ jobs:
           img=$(find z -name '*.img' -printf '%s %p\n' | sort -rn | head -1 | cut -d' ' -f2-)
           if file -b "$img" | grep -qi sparse; then simg2img "$img" r.img; img=r.img; fi
           mkdir m && sudo mount -o ro,loop "$img" m
-          sudo cat m/etc/apt/trusted.gpg.d/droidian.gpg > droidian.gpg
+          sudo chroot m cat /etc/apt/trusted.gpg.d/droidian.gpg > droidian.gpg   # an absolute symlink in the image
           # The hardware layer: binary package -> source package.
           for b in libhybris libhybris-common1 halium-wrappers libdroidian-workarounds lxc-android \
                    audiosystem-passthrough pulseaudio-modules-droid-modern pulseaudio-modules-droid-hidl \
