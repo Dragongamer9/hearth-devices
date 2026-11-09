@@ -64,6 +64,8 @@ for arg in "$@"; do
 		dch --create --package "$pkg" -v "${ver}~deb13" -D trixie "Rebuilt from Droidian's sources for Debian 13 (Hearth OS)." >/dev/null 2>&1
 	fi
 	if ! mk-build-deps -i -r -t 'apt-get -y -q --no-install-recommends' debian/control > ../builddeps.log 2>&1; then
+		echo "--- $pkg Build-Depends:"; sed -n '/^Build-Depends/,/^[A-Z][a-z-]*:/p' debian/control | head -30
+		echo "--- $pkg apt said:"; grep -A12 -iE 'unmet|not installable|Unable to' ../builddeps.log | head -40
 		echo "$pkg: FAIL build deps ($how): $(grep -vE '^(Get|Reading|Building|Selecting|Preparing|Unpacking|Setting up|Processing)' ../builddeps.log | tail -12 | tr '\n' ' ' | cut -c1-900)" | tee -a "$REPORT"
 		echo "::endgroup::"; continue
 	fi
