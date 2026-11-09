@@ -1,0 +1,103 @@
+name: RT8 Hearth rootfs
+
+# The RT8 rootfs built from Hearth OS: the Hearth OS arm64 image (CI-only
+# artifact from Dragongamer9/hearth-os) plus the RT8 hardware layer rebuilt for
+# Debian 13 (artifact of "RT8 hardware layer for Debian 13"). Test builds
+# only: an artifact, never a release.
+
+on:
+  workflow_dispatch:
+    inputs:
+      hearth_run:
+        description: hearth-os run id for the arm64 filesystem (blank = newest green one)
+        required: false
+  push:
+    paths:
+      - 'rt8/hearth-rootfs/build-hearth-rootfs.sh'
+      - '.github/workflows/rt8-hearth-rootfs.yml'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  rootfs:
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends unzip file e2fsprogs android-sdk-libsparse-utils zstd pigz dpkg-dev
+
+      - name: Find the inputs
+        id: find
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          id="${{ inputs.hearth_run }}"
+          if [ -z "$id" ]; then
+            id=$(gh api "repos/Dragongamer9/hearth-os/actions/workflows/base-peppermint-arm64.yml/runs?status=success&per_page=20" \
+              -q '.workflow_runs[].id' | while read -r r; do
+                n=$(gh api "repos/Dragongamer9/hearth-os/actions/runs/$r/artifacts" -q '[.artifacts[] | select(.name=="hearth-peppermint-arm64-rootfs" and (.expired|not))] | length')
+                [ "$n" -gt 0 ] && { echo "$r"; break; }
+              done)
+          fi
+          [ -n "$id" ] || { echo "::error::no green hearth-os arm64 run with the filesystem artifact (kept 7 days)"; exit 1; }
+          debs=$(gh api "repos/${{ github.repository }}/actions/workflows/rt8-trixie-debs.yml/runs?status=success&per_page=1" -q '.workflow_runs[0].id')
+          [ -n "$debs" ] || { echo "::error::no green 'RT8 hardware layer for Debian 13' run"; exit 1; }
+          echo "::notice title=inputs::Hearth OS arm64 run $id, RT8 Debian 13 debs run $debs"
+          echo "hearth=$id" >> "$GITHUB_OUTPUT"; echo "debs=$debs" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: hearth-peppermint-arm64-rootfs
+          repository: Dragongamer9/hearth-os
+          run-id: ${{ steps.find.outputs.hearth }}
+          github-token: ${{ github.token }}
+          path: hearth
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: rt8-trixie-debs
+          run-id: ${{ steps.find.outputs.debs }}
+          github-token: ${{ github.token }}
+          path: debs
+
+      - name: Droidian's archive key
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view --repo droidian-images/droidian --json tagName,assets -q '.tagName, (.assets[].name)' > assets.txt
+          name=$(grep -E 'phosh-phone-rootfs-api33-arm64.*\.zip$' assets.txt | head -1)
+          gh release download --repo droidian-images/droidian "$(head -1 assets.txt)" -p "$name" -D dl
+          unzip -q dl/*.zip -d z
+          img=$(find z -name '*.img' -printf '%s %p\n' | sort -rn | head -1 | cut -d' ' -f2-)
+          if file -b "$img" | grep -qi sparse; then simg2img "$img" r.img; img=r.img; fi
+          mkdir m && sudo mount -o ro,loop "$img" m
+          sudo chroot m cat /etc/apt/trusted.gpg.d/droidian.gpg > droidian.gpg
+          sudo umount m; rm -rf z dl r.img
+
+      - name: Build rootfs.img
+        run: |
+          sudo bash rt8/hearth-rootfs/build-hearth-rootfs.sh hearth/hearth-peppermint-arm64-rootfs.tar.zst debs droidian.gpg out
+          sudo chown -R "$USER" out
+
+      - name: Compress
+        run: |
+          cd out
+          pigz -6 rootfs.img
+          sha256sum rootfs.img.gz | tee rootfs.img.gz.sha256
+          echo "::notice title=rt8 Hearth rootfs::$(ls -lh rootfs.img.gz | awk '{print $5}') $(grep -c '^ok:' report.txt) ok, $(grep -c '^FAIL:' report.txt) failed"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: hearth-rt8-hearth-rootfs
+          path: |
+            out/rootfs.img.gz
+            out/rootfs.img.gz.sha256
+            out/report.txt
+          compression-level: 0
+          retention-days: 7
