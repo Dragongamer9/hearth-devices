@@ -1,0 +1,60 @@
+name: RT8 compositor for Debian 13
+
+# Builds the hwcomposer-patched wlroots + labwc (rt8/mantel/patches) for the
+# Hearth OS arm64 image, so the panel actually lights up. CI-only artifact.
+# Needs the RT8 hardware-layer debs (libhybris) from "RT8 hardware layer for
+# Debian 13".
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'rt8/hearth-rootfs/build-compositor.sh'
+      - 'rt8/mantel/patches/**'
+      - '.github/workflows/rt8-compositor.yml'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  compositor:
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends unzip file android-sdk-libsparse-utils zstd
+
+      - name: Get the RT8 hardware-layer debs and Droidian's key
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          debs=$(gh api "repos/${{ github.repository }}/actions/workflows/rt8-trixie-debs.yml/runs?status=success&per_page=1" -q '.workflow_runs[0].id')
+          [ -n "$debs" ] || { echo "::error::no green 'RT8 hardware layer for Debian 13' run"; exit 1; }
+          echo "debs run: $debs"
+          gh run download "$debs" -n rt8-trixie-debs -D debs -R "${{ github.repository }}"
+          gh release view --repo droidian-images/droidian --json tagName,assets -q '.tagName, (.assets[].name)' > assets.txt
+          name=$(grep -E 'phosh-phone-rootfs-api33-arm64.*\.zip$' assets.txt | head -1)
+          gh release download --repo droidian-images/droidian "$(head -1 assets.txt)" -p "$name" -D dl
+          unzip -q dl/*.zip -d z
+          img=$(find z -name '*.img' -printf '%s %p\n' | sort -rn | head -1 | cut -d' ' -f2-)
+          if file -b "$img" | grep -qi sparse; then simg2img "$img" r.img; img=r.img; fi
+          mkdir m && sudo mount -o ro,loop "$img" m
+          sudo chroot m cat /etc/apt/trusted.gpg.d/droidian.gpg > droidian.gpg
+          sudo umount m; rm -rf z dl r.img m
+
+      - name: Build wlroots + labwc for trixie
+        run: |
+          docker run --rm -v "$PWD:/w" arm64v8/debian:trixie \
+            bash /w/rt8/hearth-rootfs/build-compositor.sh /w/debs /w/droidian.gpg /w/out
+          echo "::notice title=compositor::$(grep -E '(wlroots|labwc): (OK|FAIL)' out/report.txt | tr '\n' ' ')"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: rt8-compositor
+          path: out/
+          retention-days: 14
