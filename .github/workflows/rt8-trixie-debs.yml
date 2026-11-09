@@ -1,0 +1,60 @@
+name: RT8 hardware layer for Debian 13
+
+# Droidian builds libhybris and friends against glibc 2.43; Hearth OS is
+# Debian 13 (glibc 2.41), so they must be rebuilt for trixie to sit on the
+# Hearth arm64 image. CI-only artifact; nothing is published.
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'rt8/hearth-rootfs/build-trixie-debs.sh'
+      - '.github/workflows/rt8-trixie-debs.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  debs:
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends unzip file android-sdk-libsparse-utils
+
+      - name: Droidian's key and source package names
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view --repo droidian-images/droidian --json tagName,assets -q '.tagName, (.assets[].name)' > assets.txt
+          name=$(grep -E 'phosh-phone-rootfs-api33-arm64.*\.zip$' assets.txt | head -1)
+          gh release download --repo droidian-images/droidian "$(head -1 assets.txt)" -p "$name" -D dl
+          unzip -q dl/*.zip -d z
+          img=$(find z -name '*.img' -printf '%s %p\n' | sort -rn | head -1 | cut -d' ' -f2-)
+          if file -b "$img" | grep -qi sparse; then simg2img "$img" r.img; img=r.img; fi
+          mkdir m && sudo mount -o ro,loop "$img" m
+          sudo cat m/etc/apt/trusted.gpg.d/droidian.gpg > droidian.gpg
+          # The hardware layer: binary package -> source package.
+          for b in libhybris libhybris-common1 halium-wrappers libdroidian-workarounds lxc-android \
+                   audiosystem-passthrough pulseaudio-modules-droid-modern pulseaudio-modules-droid-hidl \
+                   libandroid-properties1 libhardware2; do
+            sudo chroot m dpkg-query -W -f '${source:Package}\n' "$b" 2>/dev/null
+          done | sort -u | tee sources.txt
+          sudo umount m
+
+      - name: Build for Debian 13 (trixie)
+        run: |
+          docker run --rm -e KEY=/w/droidian.gpg -v "$PWD:/w" debian:trixie \
+            bash /w/rt8/hearth-rootfs/build-trixie-debs.sh /w/out $(cat sources.txt)
+          sudo chown -R "$USER" out
+          echo "::notice title=trixie debs::$(grep -c ': OK' out/report.txt) built, $(grep -c ': FAIL' out/report.txt) failed"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: rt8-trixie-debs
+          path: out/
+          retention-days: 14
