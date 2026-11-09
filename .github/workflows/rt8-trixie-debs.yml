@@ -38,10 +38,9 @@ jobs:
           mkdir m && sudo mount -o ro,loop "$img" m
           sudo chroot m cat /etc/apt/trusted.gpg.d/droidian.gpg > droidian.gpg   # an absolute symlink in the image
           # The hardware layer: binary package -> source package.
-          for b in libhybris libhybris-common1 halium-wrappers libdroidian-workarounds lxc-android \
-                   audiosystem-passthrough pulseaudio-modules-droid-modern pulseaudio-modules-droid-hidl \
-                   libandroid-properties1 libhardware2; do
-            sudo chroot m dpkg-query -W -f '${source:Package}\n' "$b" 2>/dev/null
+          # (Audio modules wait: they need Droidian's pulseaudio 14.2, Debian 13 has 17.)
+          for b in libhybris halium-wrappers lxc-android audiosystem-passthrough; do
+            sudo chroot m dpkg-query -W -f '${source:Package}=${Version}\n' "$b" 2>/dev/null
           done | sort -u | tee sources.txt
           sudo umount m
 

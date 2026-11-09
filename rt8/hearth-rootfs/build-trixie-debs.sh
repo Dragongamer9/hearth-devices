@@ -3,7 +3,7 @@
 # of Hearth OS. Droidian builds them against a newer glibc (2.43), so its
 # binaries won't install on Hearth (2.41). Runs inside debian:trixie on arm64.
 #
-#   build-trixie-debs.sh <out dir> <source package>...
+#   build-trixie-debs.sh <out dir> <source package>=<droidian version>...
 #
 # For each source package: take the source from Droidian's archive (deb-src)
 # or, failing that, from github.com/droidian/<name>; install its build deps
@@ -35,31 +35,41 @@ echo "deb [trusted=yes] file:/localrepo ./" > /etc/apt/sources.list.d/local.list
 apt-get update -q 2>&1 | tail -3
 
 REPORT="$OUT/report.txt"; : > "$REPORT"
-for pkg in "$@"; do
-	echo "::group::$pkg"
+for arg in "$@"; do
+	pkg=${arg%%=*}; ver=${arg#*=}
+	echo "::group::$pkg $ver"
 	cd /src && rm -rf "$pkg" && mkdir "$pkg" && cd "$pkg"
 	how=""
-	if apt-get source -q --only-source "$pkg" >/dev/null 2>&1; then how="droidian deb-src"
-	elif git clone -q --depth 1 "https://github.com/droidian/$pkg" "$pkg-git" 2>/dev/null; then how="github droidian/$pkg"
+	if apt-get source -q --only-source "$pkg=$ver" >/dev/null 2>&1; then how="droidian deb-src"
+	else
+		# Droidian versions end in +git<date>.<commit>.<branch>: build that commit.
+		sha=$(echo "$ver" | grep -oE 'git[0-9]{14}\.[0-9a-f]{7,}' | head -1 | cut -d. -f2)
+		if git clone -q --filter=blob:none "https://github.com/droidian/$pkg" "$pkg-git" 2>/dev/null; then
+			if [ -n "$sha" ] && git -C "$pkg-git" checkout -q "$sha" 2>/dev/null; then how="github droidian/$pkg @$sha"
+			else how="github droidian/$pkg default branch (commit ${sha:-?} not found)"; fi
+		fi
 	fi
 	dir=$(find . -mindepth 1 -maxdepth 1 -type d | head -1)
 	if [ -z "$how" ] || [ ! -d "$dir/debian" ]; then
 		echo "$pkg: FAIL no source found" | tee -a "$REPORT"; echo "::endgroup::"; continue
 	fi
 	cd "$dir"
-	# Droidian's git trees sometimes keep the version in a template.
-	[ -f debian/changelog ] || { echo "$pkg: FAIL no debian/changelog ($how)" | tee -a "$REPORT"; echo "::endgroup::"; continue; }
+	# Droidian's build tooling writes debian/changelog at build time.
+	if [ ! -f debian/changelog ]; then
+		DEBEMAIL="Dragongamer9 <game305.cl@gmail.com>" dch --create --package "$pkg" -v "${ver}~deb13" -D trixie \
+			"Rebuilt from Droidian's sources for Debian 13 (Hearth OS)." >/dev/null 2>&1
+	fi
 	if ! mk-build-deps -i -r -t 'apt-get -y -q --no-install-recommends' debian/control > ../builddeps.log 2>&1; then
-		echo "$pkg: FAIL build deps ($how): $(grep -E 'Depends|E:' ../builddeps.log | head -5 | tr '\n' ' ')" | tee -a "$REPORT"
+		echo "$pkg: FAIL build deps ($how): $(grep -E 'Depends|E:|but' ../builddeps.log | head -8 | tr '\n' ' ' | cut -c1-700)" | tee -a "$REPORT"
 		echo "::endgroup::"; continue
 	fi
 	if dpkg-buildpackage -b -uc -us -j"$(nproc)" > ../build.log 2>&1; then
 		cp ../*.deb "$OUT/" 2>/dev/null
 		cp ../*.deb /localrepo/ 2>/dev/null
 		(cd /localrepo && dpkg-scanpackages . > Packages 2>/dev/null); apt-get update -q >/dev/null 2>&1
-		echo "$pkg: OK ($how) $(cd .. && ls *.deb | tr '\n' ' ')" | tee -a "$REPORT"
+		echo "$pkg: OK ($how) $(cd .. && ls *.deb | grep -v dbgsym | tr '\n' ' ')" | tee -a "$REPORT"
 	else
-		echo "$pkg: FAIL build ($how): $(tail -15 ../build.log | tr '\n' ' ' | cut -c1-600)" | tee -a "$REPORT"
+		echo "$pkg: FAIL build ($how): $(tail -15 ../build.log | tr '\n' ' ' | cut -c1-700)" | tee -a "$REPORT"
 	fi
 	echo "::endgroup::"
 done
