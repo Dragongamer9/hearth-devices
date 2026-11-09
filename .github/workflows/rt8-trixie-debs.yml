@@ -41,7 +41,7 @@ jobs:
           # (Audio modules wait: they need Droidian's pulseaudio 14.2, Debian 13 has 17.)
           for b in libhybris halium-wrappers lxc-android audiosystem-passthrough; do
             sudo chroot m dpkg-query -W -f '${source:Package}=${Version}\n' "$b" 2>/dev/null
-          done | sort -u | tee sources.txt
+          done | sort -u | awk '/^libhybris=/{print; next} {r=r $0 "\n"} END{printf "%s", r}' | tee sources.txt   # libhybris first: the others build against it
           sudo umount m
 
       - name: Build for Debian 13 (trixie)
