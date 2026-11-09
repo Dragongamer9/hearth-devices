@@ -104,17 +104,24 @@ ln -sf ../hearth-boot-ok.service "$MNT/usr/lib/systemd/system/multi-user.target.
 #     panel). The arm64 image ships no uid-1000 user (an installer makes it on
 #     PCs); the RT8 is flashed straight, so make it here.
 say "== session"
-if ! chroot "$MNT" id hearth >/dev/null 2>&1; then
-	# Android's own gid 1000 is 'system'; keep the Hearth user off it. HOME is
-	# /var/home like the PC image (useradd default was set there).
-	chroot "$MNT" useradd -m -u 1000 -U -s /bin/bash \
-		-G sudo,video,render,input,audio,plugdev,netdev,seat,ssh hearth 2>>"$REPORT" \
-		|| chroot "$MNT" useradd -m -u 1000 -U -s /bin/bash -G sudo,video,input,audio hearth
-	# A known first-boot password; Hearth's initial-setup can change it. (RT8
-	# bring-up only — not a device anyone ships yet.)
-	echo 'hearth:hearth' | chroot "$MNT" chpasswd
-	echo 'root:hearth'   | chroot "$MNT" chpasswd
+# The image already carries a uid-1000 user (its default account). Use that as
+# the session user rather than forcing a new one.
+SU=$(chroot "$MNT" id -nu 1000 2>/dev/null || true)
+if [ -z "$SU" ]; then
+	chroot "$MNT" useradd -m -s /bin/bash -G sudo,video,render,input,audio,plugdev,netdev hearth 2>>"$REPORT" || true
+	SU=hearth
 fi
+say "session user: $SU (uid $(chroot "$MNT" id -u "$SU" 2>/dev/null))"
+# The seat/render/input groups the hwcomposer session needs; add only those
+# that exist in the image.
+for g in video render input audio seat plugdev; do
+	chroot "$MNT" getent group "$g" >/dev/null 2>&1 && chroot "$MNT" usermod -aG "$g" "$SU" 2>/dev/null || true
+done
+# A known first-boot password so SSH/console login works for bring-up (RT8
+# only — not a device anyone ships yet). Leave it set if the image already has
+# a password for the account.
+echo "$SU:hearth" | chroot "$MNT" chpasswd 2>/dev/null || true
+echo 'root:hearth' | chroot "$MNT" chpasswd 2>/dev/null || true
 # The Mantel scripts (installed into /usr/libexec/hearth by the boot ramdisk's
 # hearth-provision) look for the shell at /usr/share/hearth/shell first; the
 # image keeps it under nimbus. Point one at the other so provisioning's
@@ -133,12 +140,13 @@ vt = 1
 
 [initial_session]
 command = "/usr/libexec/hearth/mantel-session"
-user = "hearth"
+user = "__SESSION_USER__"
 
 [default_session]
 command = "/usr/libexec/hearth/mantel-session"
-user = "hearth"
+user = "__SESSION_USER__"
 EOF
+sed -i "s/__SESSION_USER__/$SU/g" "$MNT/etc/greetd/config.toml"
 chroot "$MNT" systemctl enable seatd.service >/dev/null 2>&1 || true
 chroot "$MNT" systemctl enable greetd.service >/dev/null 2>&1 || true
 ln -sfn /usr/lib/systemd/system/greetd.service "$MNT/etc/systemd/system/display-manager.service"
@@ -162,7 +170,7 @@ set +e +o pipefail
 	echo "display-manager -> $(readlink -f "$MNT/etc/systemd/system/display-manager.service" 2>&1)"
 	chroot "$MNT" systemctl is-enabled greetd.service seatd.service 2>&1 | paste -sd' '
 	echo "greetd config:"; sed 's/^/  /' "$MNT/etc/greetd/config.toml"
-	echo "hearth user: $(chroot "$MNT" id hearth 2>&1)"
+	echo "session user: $(chroot "$MNT" id "$SU" 2>&1)"
 	echo "shell link: $(ls -ld "$MNT/usr/share/hearth/shell" 2>&1 | sed 's#.*/usr/share#/usr/share#')"
 	echo "default target: $(chroot "$MNT" systemctl get-default 2>&1)"
 	echo "== android-service units"; ls "$MNT"/usr/lib/systemd/system | grep -iE 'android|lxc|halium'
