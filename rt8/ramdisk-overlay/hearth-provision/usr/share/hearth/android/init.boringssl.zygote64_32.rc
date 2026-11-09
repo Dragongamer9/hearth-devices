@@ -1,8 +1,16 @@
-# Hearth RT8: run only the 64-bit BoringSSL self-tests. The vendor advertises
-# 32-bit ABIs, but the system image's conscrypt APEX has no 32-bit test
-# binary, so the 32-bit APEX test exits 127 and its reboot_on_failure stops
-# the Android container.
+# Hearth RT8: neutralise the BoringSSL self-tests that tear the container down.
+# The vendor advertises both 32- and 64-bit ABIs, but the system image's
+# conscrypt APEX self-test binaries do not run here: the 32-bit APEX test exits
+# 127 (no 32-bit binary), and on this device the 64-bit APEX test
+# (boringssl_self_test_apex64) also exits 127. Both services carry
+# reboot_on_failure, so either one shuts the Android container down during boot
+# -- which unmounts com.android.runtime (bionic libc) and leaves libhybris, the
+# hwcomposer compositor and the whole Hearth session with nothing to load.
+#
+# This file is bind-mounted over the system image's copy, so it is the only
+# thing that triggers these self-tests. Run only the plain (non-APEX) 64-bit
+# test, which passes; never start either APEX self-test. The self-tests are a
+# FIPS crypto self-check that nothing in the Hearth bring-up (bionic, the HALs,
+# hwcomposer) depends on, so skipping the APEX ones is safe.
 on init && property:ro.product.cpu.abilist64=*
     exec_start boringssl_self_test64
-on property:apexd.status=ready && property:ro.product.cpu.abilist64=*
-    exec_start boringssl_self_test_apex64
