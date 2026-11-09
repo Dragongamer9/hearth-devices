@@ -47,8 +47,10 @@ jobs:
           [ -n "$id" ] || { echo "::error::no green hearth-os arm64 run with the filesystem artifact (kept 7 days)"; exit 1; }
           debs=$(gh api "repos/${{ github.repository }}/actions/workflows/rt8-trixie-debs.yml/runs?status=success&per_page=1" -q '.workflow_runs[0].id')
           [ -n "$debs" ] || { echo "::error::no green 'RT8 hardware layer for Debian 13' run"; exit 1; }
-          echo "::notice title=inputs::Hearth OS arm64 run $id, RT8 Debian 13 debs run $debs"
-          echo "hearth=$id" >> "$GITHUB_OUTPUT"; echo "debs=$debs" >> "$GITHUB_OUTPUT"
+          comp=$(gh api "repos/${{ github.repository }}/actions/workflows/rt8-compositor.yml/runs?status=success&per_page=1" -q '.workflow_runs[0].id')
+          [ -n "$comp" ] || echo "::warning::no green 'RT8 compositor' run; the panel will stay dark"
+          echo "::notice title=inputs::Hearth OS arm64 run $id, debs run $debs, compositor run ${comp:-none}"
+          echo "hearth=$id" >> "$GITHUB_OUTPUT"; echo "debs=$debs" >> "$GITHUB_OUTPUT"; echo "comp=$comp" >> "$GITHUB_OUTPUT"
 
       - uses: actions/download-artifact@v4
         with:
@@ -64,6 +66,14 @@ jobs:
           run-id: ${{ steps.find.outputs.debs }}
           github-token: ${{ github.token }}
           path: debs
+
+      - uses: actions/download-artifact@v4
+        if: steps.find.outputs.comp != ''
+        with:
+          name: rt8-compositor
+          run-id: ${{ steps.find.outputs.comp }}
+          github-token: ${{ github.token }}
+          path: compositor
 
       - name: Droidian's archive key
         env:
@@ -81,7 +91,8 @@ jobs:
 
       - name: Build rootfs.img
         run: |
-          sudo bash rt8/hearth-rootfs/build-hearth-rootfs.sh hearth/hearth-peppermint-arm64-rootfs.tar.zst debs droidian.gpg out
+          comp=""; [ -f compositor/opt.tar.zst ] && comp=compositor/opt.tar.zst
+          sudo bash rt8/hearth-rootfs/build-hearth-rootfs.sh hearth/hearth-peppermint-arm64-rootfs.tar.zst debs droidian.gpg out "$comp"
           sudo chown -R "$USER" out
 
       - name: Compress
