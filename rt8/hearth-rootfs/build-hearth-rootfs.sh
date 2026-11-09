@@ -79,6 +79,10 @@ inst adaptation-hybris-api33 adaptation-hybris-common
 inst droidian-quirks-tls-padding droidian-quirks-hybris-gl droidian-quirks-writable-image droidian-quirks-systemd
 inst udev-config-hybris
 inst openssh-server
+# The session's seat and autologin. The PC image logs in through SDDM on X;
+# the RT8 has no X, so greetd starts the Mantel session on the hwcomposer seat
+# directly (what phosh did on Droidian). seatd gives labwc its seat.
+inst greetd seatd
 
 # Leave apt as Hearth's: the local repo and Droidian's archive were for this build.
 rm -f "$MNT/etc/apt/sources.list.d/hearth-rt8-local.list" "$MNT/etc/apt/sources.list.d/droidian.sources" \
@@ -95,9 +99,55 @@ install -D -m 644 "$RT8/rootfs/files/usr/lib/systemd/system/hearth-boot-ok.servi
 install -D -m 755 "$RT8/rootfs/files/usr/libexec/hearth/boot-ok" "$MNT/usr/libexec/hearth/boot-ok"
 mkdir -p "$MNT/usr/lib/systemd/system/multi-user.target.wants"
 ln -sf ../hearth-boot-ok.service "$MNT/usr/lib/systemd/system/multi-user.target.wants/hearth-boot-ok.service"
+
+# 4a. The Hearth user and the session launcher (milestone B: the shell on the
+#     panel). The arm64 image ships no uid-1000 user (an installer makes it on
+#     PCs); the RT8 is flashed straight, so make it here.
+say "== session"
+if ! chroot "$MNT" id hearth >/dev/null 2>&1; then
+	# Android's own gid 1000 is 'system'; keep the Hearth user off it. HOME is
+	# /var/home like the PC image (useradd default was set there).
+	chroot "$MNT" useradd -m -u 1000 -U -s /bin/bash \
+		-G sudo,video,render,input,audio,plugdev,netdev,seat,ssh hearth 2>>"$REPORT" \
+		|| chroot "$MNT" useradd -m -u 1000 -U -s /bin/bash -G sudo,video,input,audio hearth
+	# A known first-boot password; Hearth's initial-setup can change it. (RT8
+	# bring-up only — not a device anyone ships yet.)
+	echo 'hearth:hearth' | chroot "$MNT" chpasswd
+	echo 'root:hearth'   | chroot "$MNT" chpasswd
+fi
+# The Mantel scripts (installed into /usr/libexec/hearth by the boot ramdisk's
+# hearth-provision) look for the shell at /usr/share/hearth/shell first; the
+# image keeps it under nimbus. Point one at the other so provisioning's
+# mantel-shell finds it without reflashing the boot image.
+if [ -d "$MNT/usr/share/nimbus/desktop/shell" ] && [ ! -e "$MNT/usr/share/hearth/shell" ]; then
+	mkdir -p "$MNT/usr/share/hearth"
+	ln -sfn /usr/share/nimbus/desktop/shell "$MNT/usr/share/hearth/shell"
+fi
+# greetd: autologin the Hearth user into the Mantel session. mantel-session
+# (from provisioning) falls back to a bare labwc if its pieces are missing, so
+# a blank screen still gives a cursor to debug from over SSH.
+mkdir -p "$MNT/etc/greetd"
+cat > "$MNT/etc/greetd/config.toml" <<'EOF'
+[terminal]
+vt = 1
+
+[initial_session]
+command = "/usr/libexec/hearth/mantel-session"
+user = "hearth"
+
+[default_session]
+command = "/usr/libexec/hearth/mantel-session"
+user = "hearth"
+EOF
+chroot "$MNT" systemctl enable seatd.service >/dev/null 2>&1 || true
+chroot "$MNT" systemctl enable greetd.service >/dev/null 2>&1 || true
+ln -sfn /usr/lib/systemd/system/greetd.service "$MNT/etc/systemd/system/display-manager.service"
+# Reach the graphical target even though the PC image aimed at SDDM's.
+chroot "$MNT" systemctl set-default graphical.target >/dev/null 2>&1 || true
 # Hearth's PC boot pieces don't apply here (no GRUB, no bootc on the tablet yet).
-chroot "$MNT" systemctl disable sddm.service bootc-fetch-apply-updates.timer >/dev/null 2>&1 || true
-rm -f "$MNT/etc/systemd/system/display-manager.service"
+chroot "$MNT" systemctl disable sddm.service bootc-fetch-apply-updates.timer nimbus-autologin.service >/dev/null 2>&1 || true
+# display-manager.service points at greetd (set above), not SDDM.
+ln -sfn /usr/lib/systemd/system/greetd.service "$MNT/etc/systemd/system/display-manager.service"
 
 # 5. Report what milestone B (the Hearth session on the panel) has to work with.
 set +e +o pipefail
@@ -108,6 +158,13 @@ set +e +o pipefail
 	q=$(ls "$MNT"/usr/lib/aarch64-linux-gnu/libQt6Gui.so.6 2>/dev/null)
 	[ -n "$q" ] && chroot "$MNT" ldd /usr/lib/aarch64-linux-gnu/libQt6Gui.so.6 | grep -iE 'GLESv2|libOpenGL|libGL\.' || echo "(no libQt6Gui)"
 	echo "== quickshell, labwc"; ls -l "$MNT/usr/bin/quickshell" "$MNT/usr/bin/labwc" 2>&1
+	echo "== session launcher"
+	echo "display-manager -> $(readlink -f "$MNT/etc/systemd/system/display-manager.service" 2>&1)"
+	chroot "$MNT" systemctl is-enabled greetd.service seatd.service 2>&1 | paste -sd' '
+	echo "greetd config:"; sed 's/^/  /' "$MNT/etc/greetd/config.toml"
+	echo "hearth user: $(chroot "$MNT" id hearth 2>&1)"
+	echo "shell link: $(ls -ld "$MNT/usr/share/hearth/shell" 2>&1 | sed 's#.*/usr/share#/usr/share#')"
+	echo "default target: $(chroot "$MNT" systemctl get-default 2>&1)"
 	echo "== android-service units"; ls "$MNT"/usr/lib/systemd/system | grep -iE 'android|lxc|halium'
 	echo "== accounts"; grep -E ':[0-9]{4,5}:' "$MNT/etc/passwd" | cut -d: -f1,3
 	echo "== size"; df -h "$MNT" | tail -1
