@@ -70,18 +70,33 @@ Tested with the Ubuntu Touch 24.04 image on slot B, flashed with mtkclient.
   so arch is fine, but if ever used on RT8 they'd need Chromium software-GL flags (`--disable-gpu`),
   which the Qt/WebKit env vars don't provide. `hearth-claude` is a manager that downloads Anthropic's
   Claude Desktop, which upstream ships x86-only — an upstream gap, not a Hearth port task.
+- Sound (Hearth OS, 2026-11-09): all four speakers work through the **native ALSA** card on **PipeWire**,
+  no Android HAL. The four aw883xx smart amps are native ASoC codecs (`aw883xx-aif-8-34/35/36/37`) on
+  backend **I2S3** of the `mt6789-mt6366` card. Route: front-end **DL1** (`hw:0,0`) → the interconnect
+  switches `I2S3_CH1 DL1_CH1` + `I2S3_CH2 DL1_CH2` → I2S3 → the amps auto-power via DAPM
+  (`aw883xx_start_pa: start success` ×4). What it took (all in the boot.img ramdisk overlay; verified
+  persistent across a reboot):
+  - the Droidian base runs a **standalone PulseAudio** that grabs the card, and masks PipeWire's own
+    pulse front-end. The Hearth shell is a **PipeWire** client (`Quickshell.Services.Pipewire`), so it
+    could never see that PA sink — the on-screen volume did nothing. Fix: mask the standalone
+    PulseAudio (`/etc/systemd/user/pulseaudio.{service,socket}` → /dev/null + `autospawn = no`) and run
+    **pipewire-pulse** as the PulseAudio endpoint instead (its /dev/null masks removed, socket enabled);
+  - `alsa-ucm-conf` must be installed (it wasn't on the lean arm64 image) or WirePlumber makes no sink;
+    added in `hosts`/the peppermint `build.sh`. With it + the UCM profile below, WirePlumber builds
+    `alsa_output.platform-soc_sound.HiFi__Speaker__sink`;
+  - UCM speaker profile for the card (`/usr/share/alsa/ucm2/conf.d/mt6789-mt6366/`): a HiFi verb whose
+    Speaker device is `hw:${CardId},0` (DL1), with the I2S3 switches as its Enable/Disable sequence;
+  - a WirePlumber rule (`51-hearth-rt8-speaker.conf`) forces the sink to **S16LE** — the path is 16-bit
+    and PipeWire's default S32LE came out as loud static;
+  - `hearth-audio-route.service` sets the two I2S3 switches at boot (nothing connects DL1 to the amps'
+    I2S otherwise; UCM also sets them per-stream, this is the belt-and-suspenders at boot).
+  Note: `speaker-test` fails hwparams (its period is outside the AFE's 24–24576 range) — test with
+  `aplay`/`pw-play`/a real stream. This replaces the droid-HAL / PA-14-vs-17 dead end entirely.
 
 ## Not working yet
-### Audio on Hearth OS (2026-11-09)
-- No sink. The Android-HAL bridge `audiosystem-passthrough` runs (user service, loads gbinder), but
-  PulseAudio can't load `module-droid-card`: the Droidian droid modules link `libpulsecore-14.2`
-  and ship in `/usr/lib/pulse-14.2/`, while trixie ships PulseAudio 17 (`/usr/lib/pulse-17.0+dfsg1`).
-  Symlinking fails too (`libpulsecore-14.2.so: cannot open`).
-- Rebuilding for trixie is blocked: `pulseaudio-modules-droid-modern` build-depends on
-  `pulseaudio-pulsecore-dev`, which exists only for PA 14.2; Debian/trixie has no pulsecore-dev.
-  Fix = port the droid modules from PA 14 to PA 17 (or ship Droidian's PA 14.2). Real work; parked.
-- The native ALSA card `mt6789-mt6366` is present but has no UCM profile, so WirePlumber makes no
-  sink from it either. A UCM2 profile (+ aw883xx amp routing) would be the no-Android-HAL path.
+### Some app windows can't be moved (2026-11-09)
+- The Browser and Bazaar windows can't be dragged/moved on screen (other apps are fine). Compositor/
+  window-management (labwc + Mantel), not audio. Not yet investigated.
 
 ### Battery reading at boot
 - The bootloader showed its low-battery screen with the battery at 47%; a second power-on

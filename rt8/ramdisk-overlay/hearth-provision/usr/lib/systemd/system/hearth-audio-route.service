@@ -1,0 +1,12 @@
+[Unit]
+Description=Hearth RT8 speaker route (DL1 -> I2S3 for the aw883xx amps)
+After=sound.target
+Wants=sound.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/bin/sh -c 'i=0; while [ ! -e /dev/snd/controlC0 ] && [ $i -lt 30 ]; do i=$((i+1)); sleep 1; done; amixer -c0 cset name="I2S3_CH1 DL1_CH1" 1; amixer -c0 cset name="I2S3_CH2 DL1_CH2" 1'
+
+[Install]
+WantedBy=multi-user.target

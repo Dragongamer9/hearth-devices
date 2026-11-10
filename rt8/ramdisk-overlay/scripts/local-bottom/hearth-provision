@@ -129,6 +129,33 @@ fi
 # isn't on the session PATH, so clicking it did nothing. Add a /usr/bin symlink.
 [ -x "$ROOT/usr/games/minigalaxy" ] && [ ! -e "$ROOT/usr/bin/minigalaxy" ] && ln -sf /usr/games/minigalaxy "$ROOT/usr/bin/minigalaxy"
 
+# Audio: the four aw883xx speaker amps are native ASoC codecs on backend I2S3 of
+# the mt6789-mt6366 card, and Hearth plays through PipeWire. The Droidian base
+# instead runs a standalone PulseAudio -- it grabs the card, and the shell (a
+# PipeWire client) can't see it, so the on-screen volume does nothing -- and it
+# masks PipeWire's own PulseAudio front-end. Flip that: ship the UCM speaker
+# profile (hw:0,0 -> I2S3) and the S16LE rule (the path is 16-bit; 32-bit comes
+# out as loud static), run pipewire-pulse as the PulseAudio endpoint, keep the
+# standalone PulseAudio from starting, and set the DL1->I2S3 route at boot
+# (nothing connects the front-end to the amps' I2S otherwise). alsa-ucm-conf must
+# be in the image for the UCM profile to load (added in hearth-os build.sh).
+put usr/share/alsa/ucm2/conf.d/mt6789-mt6366/mt6789-mt6366.conf
+put usr/share/alsa/ucm2/conf.d/mt6789-mt6366/HiFi.conf
+put etc/wireplumber/wireplumber.conf.d/51-hearth-rt8-speaker.conf
+put etc/pulse/client.conf.d/00-hearth-noautospawn.conf
+put usr/lib/systemd/system/hearth-audio-route.service
+mkdir -p "$w/multi-user.target.wants"
+ln -sf ../hearth-audio-route.service "$w/multi-user.target.wants/hearth-audio-route.service"
+# pipewire-pulse on for every user session (Droidian masks it with /dev/null),
+# the standalone PulseAudio off.
+mkdir -p "$ROOT/etc/systemd/user/sockets.target.wants"
+for u in pipewire-pulse.service pipewire-pulse.socket; do
+	[ "$(readlink "$ROOT/etc/systemd/user/$u" 2>/dev/null)" = /dev/null ] && rm -f "$ROOT/etc/systemd/user/$u"
+done
+ln -sf /usr/lib/systemd/user/pipewire-pulse.socket "$ROOT/etc/systemd/user/sockets.target.wants/pipewire-pulse.socket"
+ln -sf /dev/null "$ROOT/etc/systemd/user/pulseaudio.service"
+ln -sf /dev/null "$ROOT/etc/systemd/user/pulseaudio.socket"
+
 # An earlier build left this here; the container never picked it up.
 rm -f "$ROOT/var/lib/lxc/android/overrides/init.mt8781.rc"
 
