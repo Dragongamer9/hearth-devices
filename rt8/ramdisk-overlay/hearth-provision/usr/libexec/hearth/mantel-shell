@@ -7,15 +7,21 @@ for d in /usr/share/hearth/shell /userdata/hearth-src/hearth-os/hosts/linux/desk
 	[ -f "$d/shell.qml" ] && { shell=$d; break; }
 done
 if [ "$1" = --path ]; then echo "$shell"; exit 0; fi
-# Render the shell on the CPU (Qt's software backend) into wl_shm buffers that
-# labwc composites. The panel's Mali EGL is an Android EGL and can't hand a Qt
-# Wayland *client* a GPU surface -- quickshell's every frame fails with "Cannot
-# find EGLConfig" / EGL_BAD_CONFIG and the screen stays black. Software
-# rendering sidesteps that; a 2D shell draws fine this way. (GPU acceleration
-# for Wayland clients on this panel is future work.)
-# QSG_RENDER_LOOP=basic: Qt's threaded loop stalls for good under libhybris EGL
-# (picture freezes after a minute); the basic loop renders on the GUI thread.
-export QT_QUICK_BACKEND=software QSG_RENDER_LOOP=basic EGL_PLATFORM=wayland QT_QPA_PLATFORM=wayland XDG_CURRENT_DESKTOP=Hearth XDG_SESSION_DESKTOP=hearth
+# Render the shell with Mesa's llvmpipe -- a multithreaded, NEON/SIMD OpenGL that
+# runs on the CPU -- into buffers labwc composites. The panel's Mali EGL is an
+# Android EGL that can't hand a Qt Wayland *client* a GPU surface (every frame
+# fails with "Cannot find EGLConfig"), so the real GPU is out for clients; but
+# llvmpipe gives quickshell a genuine GLES 3.2 context on the CPU, tested smoother
+# than Qt's plain software raster. glvnd has two EGL drivers registered and the
+# Android (libhybris) one wins by default, so force Mesa's ICD; LIBGL_ALWAYS_SOFTWARE
+# + GALLIUM_DRIVER=llvmpipe pin it to the CPU renderer. (A real GPU path for Wayland
+# clients -- Panfrost or android_wlegl -- is future work; see rt8/STATUS.md.)
+# QSG_RENDER_LOOP=basic: the threaded loop stalled under the old libhybris EGL;
+# kept on the GUI thread to stay safe (worth revisiting threaded now EGL is Mesa).
+export QSG_RENDER_LOOP=basic EGL_PLATFORM=wayland QT_QPA_PLATFORM=wayland \
+	__EGL_VENDOR_LIBRARY_FILENAMES=/usr/share/glvnd/egl_vendor.d/50_mesa.json \
+	LIBGL_ALWAYS_SOFTWARE=1 GALLIUM_DRIVER=llvmpipe \
+	XDG_CURRENT_DESKTOP=Hearth XDG_SESSION_DESKTOP=hearth
 # Droidian's profile hides Qt title bars (phone style); Mantel windows have them.
 unset QT_WAYLAND_DISABLE_WINDOWDECORATION WLR_BACKENDS WLR_HWC_SKIP_VERSION_CHECK DISPLAY
 exec /opt/quickshell/bin/quickshell -p "$shell"

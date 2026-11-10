@@ -12,19 +12,25 @@ export XDG_CURRENT_DESKTOP=Hearth XDG_SESSION_DESKTOP=hearth
 [ -n "$XDG_RUNTIME_DIR" ] || export XDG_RUNTIME_DIR=/run/user/$(id -u)
 export DBUS_SESSION_BUS_ADDRESS="unix:path=$XDG_RUNTIME_DIR/bus"
 
-# RT8: render apps on the CPU. The panel's Mali EGL is an Android EGL and can't
-# give a Wayland *client* a GPU surface, so Qt apps die with "Cannot find
-# EGLConfig", WebKitGTK apps get no compositing surface, and GTK4's GL renderer
-# fails -- every graphical app looks like it won't open. These are toolkit-level
-# software switches; they have no effect on labwc, which drives the panel
-# through the hwcomposer/Android EGL rather than any of these toolkits. (GPU for
-# Wayland clients on this panel is future work.)
-export QT_QUICK_BACKEND=software
+# RT8: render apps with Mesa's llvmpipe -- a multithreaded, NEON/SIMD OpenGL on
+# the CPU. The panel's Mali EGL is an Android EGL that can't give a Wayland
+# *client* a GPU surface (Qt dies with "Cannot find EGLConfig", GTK4's GL path
+# fails), so the real GPU is out for clients; but llvmpipe gives them a genuine
+# GL context on the CPU, and Qt Quick + GTK4's 'ngl' renderer both tested smoother
+# on it than on their plain software raster/cairo. glvnd registers two EGL drivers
+# and the Android (libhybris) one wins by default, so force Mesa's ICD;
+# LIBGL_ALWAYS_SOFTWARE + GALLIUM_DRIVER=llvmpipe pin the CPU renderer. WebKitGTK
+# web *content* stays on its own disabled-compositing/software path (the GL web
+# path is untested here); only its GTK chrome uses llvmpipe. A real client GPU
+# (Panfrost / android_wlegl) is future work; see rt8/STATUS.md.
+export __EGL_VENDOR_LIBRARY_FILENAMES=/usr/share/glvnd/egl_vendor.d/50_mesa.json
+export LIBGL_ALWAYS_SOFTWARE=1 GALLIUM_DRIVER=llvmpipe
+export GSK_RENDERER=ngl
 export WEBKIT_DISABLE_COMPOSITING_MODE=1 WEBKIT_DISABLE_DMABUF_RENDERER=1
-export GSK_RENDERER=cairo
 # Reach apps started through the systemd user manager / D-Bus activation too.
 command -v systemctl >/dev/null 2>&1 && systemctl --user import-environment \
-	QT_QUICK_BACKEND WEBKIT_DISABLE_COMPOSITING_MODE WEBKIT_DISABLE_DMABUF_RENDERER GSK_RENDERER 2>/dev/null
+	__EGL_VENDOR_LIBRARY_FILENAMES LIBGL_ALWAYS_SOFTWARE GALLIUM_DRIVER GSK_RENDERER \
+	WEBKIT_DISABLE_COMPOSITING_MODE WEBKIT_DISABLE_DMABUF_RENDERER 2>/dev/null
 :
 
 if [ ! -x /opt/quickshell/bin/quickshell ] || [ -z "$(/usr/libexec/hearth/mantel-shell --path)" ]; then
