@@ -40,6 +40,19 @@ if [ -n "$rc" ] && grep -q '</labwc_config>' "$rc"; then
 else
 	printf '<?xml version="1.0"?>\n<labwc_config>\n  %s\n</labwc_config>\n' "$touchxml" > "$cfg/rc.xml"
 fi
+# Apps that draw their own title bars (CSD: the Browser/Firefox, Bazaar) can't
+# be dragged by touch because labwc leaves their move to the client's own
+# title bar, which ignores touch. Force server-side decorations on them so
+# labwc gives them a title bar it will move. RT8-only (this generator); Hearth
+# Desktop on PCs keeps the client-drawn look.
+if ! grep -q 'serverDecoration' "$cfg/rc.xml"; then
+	rules='    <windowRule identifier="hearth-browser" serverDecoration="yes" />\n    <windowRule identifier="io.github.kolunmi.Bazaar" serverDecoration="yes" />'
+	if grep -q '</windowRules>' "$cfg/rc.xml"; then
+		sed -i "s#</windowRules>#$rules\n  </windowRules>#" "$cfg/rc.xml"
+	else
+		sed -i "s#</labwc_config>#  <windowRules>\n$rules\n  </windowRules>\n</labwc_config>#" "$cfg/rc.xml"
+	fi
+fi
 for f in themerc themerc-override menu.xml environment; do
 	[ -n "$rc" ] && [ -f "${rc%/*}/$f" ] && cp "${rc%/*}/$f" "$cfg/$f"
 done
