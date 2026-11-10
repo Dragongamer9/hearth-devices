@@ -38,10 +38,10 @@ jobs:
           mkdir m && sudo mount -o ro,loop "$img" m
           sudo chroot m cat /etc/apt/trusted.gpg.d/droidian.gpg > droidian.gpg   # an absolute symlink in the image
           # The hardware layer: binary package -> source package.
-          # pulseaudio-modules-droid-modern: Droidian's build links libpulsecore-14.2;
-          # trixie has PulseAudio 17, so without this rebuild there is no audio sink.
-          # Rebuilt here against trixie's pulseaudio-dev so the modules land in pulse-17.
-          for b in libhybris halium-wrappers lxc-android audiosystem-passthrough pulseaudio-modules-droid-modern; do
+          # (Audio modules wait: pulseaudio-modules-droid-modern build-depends on
+          # pulseaudio-pulsecore-dev, which only exists for Droidian's PA 14.2;
+          # trixie has PA 17. Needs a PA 14->17 source port. See STATUS.md "Audio".)
+          for b in libhybris halium-wrappers lxc-android audiosystem-passthrough; do
             sudo chroot m dpkg-query -W -f '${source:Package}=${Version}\n' "$b" 2>/dev/null
           done | sort -u | awk '/^libhybris=/{print; next} {r=r $0 "\n"} END{printf "%s", r}' | tee sources.txt   # libhybris first: the others build against it
           sudo umount m

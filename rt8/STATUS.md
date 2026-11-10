@@ -39,7 +39,38 @@ Tested with the Ubuntu Touch 24.04 image on slot B, flashed with mtkclient.
   line, which the stock DT lists only on 0x34; patch 0010 lets the other three probe without it.
   With only 0x34 running, sound came from the top-right speaker alone and seemed very quiet.
 
+- Hearth OS desktop (2026-11-09): the Hearth OS arm64 image boots to the Mantel desktop on the panel
+  (boot 19). What it took:
+  - the 64-bit BoringSSL APEX self-test (`boringssl_self_test_apex64`) exits 127 and its
+    `reboot_on_failure` was tearing the container down; neutralised in `init.boringssl.zygote64_32.rc`
+    (run only the plain 64-bit test, never the APEX ones);
+  - `vndk-apex` was deleted by a systemd ordering cycle, so VNDK v31 was never staged and the
+    container's bootstrap linkerconfig aborted (SANITIZER_DEFAULT_VENDOR); run it as an ExecStartPre
+    of `lxc@android` instead (drop-in in the ramdisk overlay);
+  - `host-apex` skipped `com.android.runtime` ("overlapping loop device") so the host had no bionic
+    libc and labwc segfaulted; now falls back to an explicit `losetup`;
+  - greetd was burning its start limit before the container was up; ordered After the container +
+    host-apex, start limit removed;
+  - the shell (quickshell) and Qt apps can't get a GPU surface from the Mali EGL ("Cannot find
+    EGLConfig"); render in software (`QT_QUICK_BACKEND=software` in `mantel-shell`). GPU for Wayland
+    clients is future work.
+- Hearth Browser (2026-11-09): the arm64 image shipped an x86-64 Firefox (`Exec format error`);
+  `hearth-os` install-firefox now picks `linux-aarch64`, and arm64 Firefox renders in software
+  (it crashes on the VA-API/renderDeviceFD probe otherwise). Other WebKit/Qt apps need the same
+  software-render treatment, done session-wide (TODO).
+
 ## Not working yet
+### Audio on Hearth OS (2026-11-09)
+- No sink. The Android-HAL bridge `audiosystem-passthrough` runs (user service, loads gbinder), but
+  PulseAudio can't load `module-droid-card`: the Droidian droid modules link `libpulsecore-14.2`
+  and ship in `/usr/lib/pulse-14.2/`, while trixie ships PulseAudio 17 (`/usr/lib/pulse-17.0+dfsg1`).
+  Symlinking fails too (`libpulsecore-14.2.so: cannot open`).
+- Rebuilding for trixie is blocked: `pulseaudio-modules-droid-modern` build-depends on
+  `pulseaudio-pulsecore-dev`, which exists only for PA 14.2; Debian/trixie has no pulsecore-dev.
+  Fix = port the droid modules from PA 14 to PA 17 (or ship Droidian's PA 14.2). Real work; parked.
+- The native ALSA card `mt6789-mt6366` is present but has no UCM profile, so WirePlumber makes no
+  sink from it either. A UCM2 profile (+ aw883xx amp routing) would be the no-Android-HAL path.
+
 ### Battery reading at boot
 - The bootloader showed its low-battery screen with the battery at 47%; a second power-on
   booted normally. MTK_FG_NVRAM (fuel gauge calibration) fails to open in the container.
