@@ -12,6 +12,21 @@ export XDG_CURRENT_DESKTOP=Hearth XDG_SESSION_DESKTOP=hearth
 [ -n "$XDG_RUNTIME_DIR" ] || export XDG_RUNTIME_DIR=/run/user/$(id -u)
 export DBUS_SESSION_BUS_ADDRESS="unix:path=$XDG_RUNTIME_DIR/bus"
 
+# RT8: render apps on the CPU. The panel's Mali EGL is an Android EGL and can't
+# give a Wayland *client* a GPU surface, so Qt apps die with "Cannot find
+# EGLConfig", WebKitGTK apps get no compositing surface, and GTK4's GL renderer
+# fails -- every graphical app looks like it won't open. These are toolkit-level
+# software switches; they have no effect on labwc, which drives the panel
+# through the hwcomposer/Android EGL rather than any of these toolkits. (GPU for
+# Wayland clients on this panel is future work.)
+export QT_QUICK_BACKEND=software
+export WEBKIT_DISABLE_COMPOSITING_MODE=1 WEBKIT_DISABLE_DMABUF_RENDERER=1
+export GSK_RENDERER=cairo
+# Reach apps started through the systemd user manager / D-Bus activation too.
+command -v systemctl >/dev/null 2>&1 && systemctl --user import-environment \
+	QT_QUICK_BACKEND WEBKIT_DISABLE_COMPOSITING_MODE WEBKIT_DISABLE_DMABUF_RENDERER GSK_RENDERER 2>/dev/null
+:
+
 if [ ! -x /opt/quickshell/bin/quickshell ] || [ -z "$(/usr/libexec/hearth/mantel-shell --path)" ]; then
 	exec /usr/bin/phosh-session
 fi
