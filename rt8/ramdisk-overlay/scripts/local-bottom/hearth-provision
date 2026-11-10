@@ -116,6 +116,19 @@ if [ -f "$ROOT/usr/share/phosh/phoc.ini" ] && [ ! -e "$ROOT/etc/phosh/phoc.ini" 
 	{ cat "$ROOT/usr/share/phosh/phoc.ini"; printf '\n[output:HWCOMPOSER-1]\nscale = 1.25\nrotate = 90\n'; } > "$ROOT/etc/phosh/phoc.ini"
 	chmod 644 "$ROOT/etc/phosh/phoc.ini"
 fi
+# Flatpak sandbox: Debian's bubblewrap is installed setuid-root, but this
+# build's bwrap is the non-setuid kind and refuses to run that way ("setuid
+# use of bubblewrap is not supported"), so every Flatpak app -- Bazaar (the
+# app store) included -- dies with "ldconfig failed". The kernel has working
+# unprivileged user namespaces (CONFIG_USER_NS=y, max_user_namespaces > 0), so
+# clear the setuid bit and let bwrap use the userns path. Idempotent.
+[ -u "$ROOT/usr/bin/bwrap" ] && { chmod u-s "$ROOT/usr/bin/bwrap"; say "provision: cleared setuid on bwrap (Flatpak sandbox)"; }
+
+# Minigalaxy (GOG client) installs its launcher at /usr/games/minigalaxy (Debian
+# policy for games). The app grid runs it by the bare name "minigalaxy", which
+# isn't on the session PATH, so clicking it did nothing. Add a /usr/bin symlink.
+[ -x "$ROOT/usr/games/minigalaxy" ] && [ ! -e "$ROOT/usr/bin/minigalaxy" ] && ln -sf /usr/games/minigalaxy "$ROOT/usr/bin/minigalaxy"
+
 # An earlier build left this here; the container never picked it up.
 rm -f "$ROOT/var/lib/lxc/android/overrides/init.mt8781.rc"
 
