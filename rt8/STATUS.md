@@ -56,8 +56,20 @@ Tested with the Ubuntu Touch 24.04 image on slot B, flashed with mtkclient.
     clients is future work.
 - Hearth Browser (2026-11-09): the arm64 image shipped an x86-64 Firefox (`Exec format error`);
   `hearth-os` install-firefox now picks `linux-aarch64`, and arm64 Firefox renders in software
-  (it crashes on the VA-API/renderDeviceFD probe otherwise). Other WebKit/Qt apps need the same
-  software-render treatment, done session-wide (TODO).
+  (it crashes on the VA-API/renderDeviceFD probe otherwise).
+- App software-render, session-wide (2026-11-09): the same Mali-EGL "no GPU surface for Wayland
+  clients" that killed quickshell kills every toolkit's GPU path, so `mantel-session` now exports
+  `QT_QUICK_BACKEND=software`, `WEBKIT_DISABLE_COMPOSITING_MODE=1`, `WEBKIT_DISABLE_DMABUF_RENDERER=1`
+  and `GSK_RENDERER=cairo` for the whole session (and `systemctl --user import-environment`s them for
+  D-Bus-activated apps). Covers Qt/QML, WebKitGTK and GTK4 apps. labwc is untouched (it drives the
+  panel through the hwcomposer, not these toolkits). Ships in boot.img only (ramdisk overlay).
+- App-arch audit (2026-11-09): every *core* shipped app is Qt/QML or GTK (covered above) or the
+  Firefox browser (fixed). The only Electron bits are `hosts/electron` (the Chromium "window", an
+  alternate renderer used on Nvidia, not the RT8 default) and `hosts/linux`'s nimbus browser; both
+  build arm64-native on the arm64 runner (`dist/linux-arm64-unpacked`, Electron 38 has arm64 Linux),
+  so arch is fine, but if ever used on RT8 they'd need Chromium software-GL flags (`--disable-gpu`),
+  which the Qt/WebKit env vars don't provide. `hearth-claude` is a manager that downloads Anthropic's
+  Claude Desktop, which upstream ships x86-only — an upstream gap, not a Hearth port task.
 
 ## Not working yet
 ### Audio on Hearth OS (2026-11-09)
