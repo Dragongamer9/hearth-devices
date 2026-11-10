@@ -76,6 +76,12 @@ inst libhybris libhybris-utils libhybris-common1 libandroid-properties1 libhardw
 inst lxc-android
 inst halium-wrappers
 inst audiosystem-passthrough
+# PulseAudio's Android-HAL card/sink/source modules. The stock Droidian build
+# is linked against libpulsecore-14.2; trixie ships PulseAudio 17, so these are
+# rebuilt against it (RT8 hardware layer workflow) and land in pulse-17's module
+# dir. Without them PulseAudio logs "cannot open module-droid-card" and there is
+# no audio sink at all. pulseaudio-config-droid carries the matching config.
+inst pulseaudio-modules-droid-modern pulseaudio-config-droid
 inst adaptation-hybris-api33 adaptation-hybris-common
 inst droidian-quirks-tls-padding droidian-quirks-hybris-gl droidian-quirks-writable-image droidian-quirks-systemd
 inst udev-config-hybris
