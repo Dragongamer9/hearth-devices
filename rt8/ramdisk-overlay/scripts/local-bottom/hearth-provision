@@ -60,6 +60,12 @@ put usr/lib/systemd/system/hearth-vndk-apex.service
 put usr/libexec/hearth/vndk-apex
 put usr/lib/systemd/system/hearth-host-apex.service
 put usr/libexec/hearth/host-apex
+# Run vndk-apex as a pre-step of the container (the standalone service is
+# deleted to break an ordering cycle on this path), and hold greetd until the
+# container + host APEX libs are up so labwc doesn't start into a missing
+# hwcomposer stack and burn its start limit.
+put etc/systemd/system/lxc@android.service.d/hearth-vndk-pre.conf
+put etc/systemd/system/greetd.service.d/hearth-wait.conf
 put usr/lib/systemd/system/lightdm.service.d/hearth-composer-only.conf
 put usr/lib/systemd/system/hearth-wifi-on.service
 put usr/libexec/hearth/wifi-on

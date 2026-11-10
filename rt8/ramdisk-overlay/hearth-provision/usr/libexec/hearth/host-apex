@@ -27,7 +27,19 @@ for apex in sorted(SOURCES):
         with zipfile.ZipFile(apex) as zf, zf.open("apex_payload.img") as p:
             offset = p._orig_compress_start
         os.makedirs(target, exist_ok=True)
-        subprocess.run(["mount", "-o", f"loop,ro,offset={offset}", apex, target], check=True)
+        try:
+            subprocess.run(["mount", "-o", f"loop,ro,offset={offset}", apex, target], check=True)
+        except subprocess.CalledProcessError:
+            # The container's apexd has already loop-mounted this file (notably
+            # com.android.runtime, which holds bionic libc), so "mount -o loop"
+            # refuses the overlapping loop and the host is left without libc.so
+            # -- libhybris then can't start and labwc segfaults. losetup allows a
+            # second, independent association for the same backing file; make one
+            # and mount that instead.
+            dev = subprocess.run(
+                ["losetup", "--find", "--show", "--read-only", "--offset", str(offset), apex],
+                check=True, capture_output=True, text=True).stdout.strip()
+            subprocess.run(["mount", "-o", "ro", dev, target], check=True)
         log("mounted", name)
     except Exception as e:
         log("skipped", name, ":", e)
